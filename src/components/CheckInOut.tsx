@@ -146,7 +146,7 @@ export default function CheckInOut({ rooms, setRooms, transactions, setTransacti
     <div className="space-y-6">
       
       {/* Header Tabs */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 no-print">
         <div>
           <h2 className="text-xl font-bold tracking-tight">{t('checkInOut')}</h2>
           <p className="text-xs text-slate-400">Instantly execute check-in bookings, complete stays, and emit settled balance receipts.</p>
@@ -175,7 +175,7 @@ export default function CheckInOut({ rooms, setRooms, transactions, setTransacti
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
         {/* Active execution forms */}
-        <div className="lg:col-span-5 bg-slate-800/20 border border-slate-700/60 p-6 rounded-2xl shadow-sm">
+        <div className="lg:col-span-5 bg-slate-800/20 border border-slate-700/60 p-6 rounded-2xl shadow-sm no-print">
           {activeSubTab === 'checkin' ? (
             <div className="space-y-4">
               <div className="flex items-center space-x-2 border-b border-slate-700 pb-3 mb-2">
@@ -462,7 +462,7 @@ export default function CheckInOut({ rooms, setRooms, transactions, setTransacti
           </div>
 
           {invoice && (
-            <div className="mt-6 flex justify-center gap-3">
+            <div className="mt-6 flex justify-center gap-3 no-print">
               <button
                 onClick={() => window.print()}
                 className="px-4 py-2 border border-slate-700 bg-slate-900/60 hover:bg-slate-900 rounded-xl text-xs font-semibold text-slate-300 transition"

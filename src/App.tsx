@@ -129,7 +129,7 @@ export default function App() {
       )}
 
       {/* Main Top Header Navigation Panel */}
-      <header className={`sticky top-0 z-40 border-b flex items-center justify-between px-6 py-3.5 shadow-sm ${
+      <header className={`sticky top-0 z-40 border-b flex items-center justify-between px-6 py-3.5 shadow-sm no-print ${
         theme === 'dark' ? 'bg-[#1e293b]/90 border-slate-750 backdrop-blur-md' : 'bg-white/95 border-slate-200 backdrop-blur-md'
       }`}>
         <div className="flex items-center space-x-3.5">
@@ -228,7 +228,7 @@ export default function App() {
       <div className="flex">
         
         {/* Navigation Sidebar Panel */}
-        <aside className={`w-64 border-r shrink-0 hidden md:block min-h-[calc(100vh-62px)] ${
+        <aside className={`w-64 border-r shrink-0 hidden md:block min-h-[calc(100vh-62px)] no-print ${
           theme === 'dark' ? 'bg-[#111c30]/60 border-slate-750' : 'bg-white border-slate-200'
         }`}>
           <nav className="p-4 space-y-1">
@@ -410,7 +410,7 @@ export default function App() {
 
         {/* Notifications Tray Sidebar Slideout */}
         {showNotifications && (
-          <aside className="w-80 border-l p-5 shrink-0 hidden lg:block bg-[#111c30]/90 border-slate-750 min-h-[calc(100vh-62px)] relative">
+          <aside className="w-80 border-l p-5 shrink-0 hidden lg:block bg-[#111c30]/90 border-slate-750 min-h-[calc(100vh-62px)] relative no-print">
             <div className="flex items-center justify-between border-b border-slate-700 pb-3 mb-4">
               <span className="font-bold text-slate-100 text-xs flex items-center gap-1.5 uppercase tracking-wider">
                 <Bell className="w-4 h-4 text-indigo-400" />

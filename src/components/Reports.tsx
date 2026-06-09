@@ -31,20 +31,27 @@ export default function Reports({ rooms, transactions, staff, lang, t, triggerTo
           <p className="text-xs text-slate-400">Compile financial balance metrics, summary inventory catalogs, and export files.</p>
         </div>
 
-        <div className="flex gap-2">
+        <div className="flex gap-2 no-print">
           <button
             onClick={() => handleExport('PDF')}
-            className="flex items-center gap-2 bg-indigo-650 hover:bg-slate-700 text-slate-150 border border-slate-750 font-semibold text-xs px-3.5 py-2 rounded-xl transition"
+            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-750 text-slate-150 border border-slate-700 font-semibold text-xs px-3.5 py-2 rounded-xl transition"
           >
             <Download className="w-4 h-4 text-indigo-400" />
             <span>PDF Export</span>
           </button>
           <button
             onClick={() => handleExport('Excel')}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition"
+            className="flex items-center gap-2 bg-slate-800 hover:bg-slate-750 text-slate-150 border border-slate-700 font-semibold text-xs px-3.5 py-2 rounded-xl transition"
+          >
+            <FileText className="w-4 h-4 text-emerald-400" />
+            <span>Excel Sheet</span>
+          </button>
+          <button
+            onClick={() => window.print()}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs px-4 py-2.5 rounded-xl transition shadow-md"
           >
             <Printer className="w-4 h-4" />
-            <span>Excel Sheet</span>
+            <span>Print Report</span>
           </button>
         </div>
       </div>
