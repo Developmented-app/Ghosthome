@@ -296,6 +296,7 @@ export default function App() {
             <Dashboard 
               rooms={rooms} 
               transactions={transactions} 
+              reservations={reservations}
               lang={lang} 
               t={t} 
               setActiveTab={setActiveTab} 
@@ -340,6 +341,7 @@ export default function App() {
               setRooms={setRooms} 
               transactions={transactions}
               setTransactions={setTransactions}
+              guests={guests}
               lang={lang} 
               t={t} 
               triggerToast={triggerToast} 

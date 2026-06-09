@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
-import { Room, Transaction } from '../types';
-import { KeyRound, ArrowLeftRight, CreditCard, Receipt, Milestone, Plus, RefreshCw, FileText, CheckCircle } from 'lucide-react';
+import { Room, Transaction, Guest } from '../types';
+import { KeyRound, ArrowLeftRight, CreditCard, Receipt, Milestone, Plus, RefreshCw, FileText, CheckCircle, QrCode, ScanLine } from 'lucide-react';
 
 interface CheckInOutProps {
   rooms: Room[];
   setRooms: React.Dispatch<React.SetStateAction<Room[]>>;
   transactions: Transaction[];
   setTransactions: React.Dispatch<React.SetStateAction<Transaction[]>>;
+  guests: Guest[];
   lang: string;
   t: (key: string) => string;
   triggerToast: (msg: string) => void;
 }
 
-export default function CheckInOut({ rooms, setRooms, transactions, setTransactions, lang, t, triggerToast }: CheckInOutProps) {
+export default function CheckInOut({ rooms, setRooms, transactions, setTransactions, guests, lang, t, triggerToast }: CheckInOutProps) {
   const [activeSubTab, setActiveSubTab] = useState<'checkin' | 'checkout'>('checkin');
+
+  // QR Code fast-scan console simulation states
+  const [selectedScanGuestId, setSelectedScanGuestId] = useState<string>('');
+  const [scanStatus, setScanStatus] = useState<'idle' | 'scanning' | 'success'>('idle');
+  const [scannedGuestInfo, setScannedGuestInfo] = useState<Guest | null>(null);
 
   // CheckIn Form States
   const [guestName, setGuestName] = useState('');
@@ -34,6 +40,46 @@ export default function CheckInOut({ rooms, setRooms, transactions, setTransacti
   // Filter occupied/available rooms respectively
   const availableRooms = rooms.filter(r => r.status === 'Available');
   const occupiedRooms = rooms.filter(r => r.status === 'Occupied');
+
+  const playScanSound = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(1400, audioCtx.currentTime); // high, short beep 
+      gainNode.gain.setValueAtTime(0.04, audioCtx.currentTime);
+      
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.12);
+    } catch (e) {
+      console.log("Audio contexts blocked or not supported on client run");
+    }
+  };
+
+  const handleSimulateScan = (guestIdStr: string) => {
+    if (!guestIdStr) {
+      setScanStatus('idle');
+      setScannedGuestInfo(null);
+      return;
+    }
+    const targetGuest = guests.find(g => g.id === Number(guestIdStr));
+    if (!targetGuest) return;
+
+    setScanStatus('scanning');
+    triggerToast(lang === 'en' ? `Initializing QR Scanner Cam...` : `កំពុងដំណើរការម៉ាស៊ីនស្កេន QR...`);
+
+    setTimeout(() => {
+      setScanStatus('success');
+      setScannedGuestInfo(targetGuest);
+      setGuestName(targetGuest.name); // populate guestName state to auto-fill form
+      playScanSound();
+      triggerToast(lang === 'en' ? `✓ QR Verified: ${targetGuest.name} auto-filled!` : `✓ បានផ្ទៀងផ្ទាត់ QR៖ បំពេញដោយស្វ័យប្រវត្តិសម្រាប់ ${targetGuest.name}!`);
+    }, 1100);
+  };
 
   const handleRoomSelect = (no: string) => {
     setRoomNo(no);
@@ -181,6 +227,113 @@ export default function CheckInOut({ rooms, setRooms, transactions, setTransacti
               <div className="flex items-center space-x-2 border-b border-slate-700 pb-3 mb-2">
                 <KeyRound className="w-5 h-5 text-indigo-400" />
                 <h3 className="font-bold text-slate-100 text-base">Check-In Registration Panel</h3>
+              </div>
+
+              {/* QR FAST CHECK-IN SCANNER SIMULATOR */}
+              <div className="bg-slate-900/60 border border-indigo-500/15 rounded-xl p-4 space-y-3.5 relative overflow-hidden my-3">
+                <div className="absolute top-0 right-0 left-0 h-1 bg-gradient-to-r from-indigo-500 via-indigo-400 to-indigo-600"></div>
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-[10px] text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
+                    <QrCode className="w-4 h-4 text-indigo-400 shrink-0 animate-pulse" />
+                    <span>QR Code Scanner Console</span>
+                  </span>
+                  <span className="text-[9px] bg-slate-800 border border-slate-750 text-indigo-300 font-mono font-bold px-1.5 py-0.5 rounded leading-none">
+                    Hardware Emulated
+                  </span>
+                </div>
+
+                <p className="text-[10px] text-slate-400 leading-normal">
+                  {lang === 'en' 
+                    ? 'Scan arrivals instantly. Select any registered profile to display their unique code. Clicking simulate automatically decodes the ticket values and populates the check-in forms.' 
+                    : 'ស្កេនការមកដល់ភ្លាមៗ។ ជ្រើសរើសព័ត៌មានភ្ញៀវ ដើម្បីបង្ហាញកូដ QR រួចស្កេនដើម្បីបំពេញព័ត៌មានដោយស្វ័យប្រវត្តិ។'}
+                </p>
+
+                <div className="space-y-1.5">
+                  <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                    {lang === 'en' ? 'Select Registered Guest QR Pass' : 'ជ្រើសរើសកូដ QR ភ្ញៀវ'}
+                  </label>
+                  <select
+                    value={selectedScanGuestId}
+                    onChange={(e) => {
+                      setSelectedScanGuestId(e.target.value);
+                      setScanStatus('idle');
+                      setScannedGuestInfo(null);
+                    }}
+                    className="w-full bg-slate-950 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-indigo-300 outline-none cursor-pointer focus:border-indigo-500 transition font-semibold"
+                  >
+                    <option value="">-- {lang === 'en' ? 'Choose Guest to Simulate Scan...' : 'ជ្រើសរើសព័ត៌មានភ្ញៀវ...'} --</option>
+                    {guests.map(g => (
+                      <option key={g.id} value={g.id}>
+                        {g.name} (Passport ID: {g.id_passport})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {selectedScanGuestId && (() => {
+                  const activeGuest = guests.find(g => g.id === Number(selectedScanGuestId));
+                  if (!activeGuest) return null;
+
+                  return (
+                    <div className="flex items-center gap-4 bg-slate-950/80 p-3 rounded-xl border border-slate-800/80 mt-1 transition animate-in fade-in duration-200">
+                      {/* Interactive Visual Scan view Finder */}
+                      <div className="relative w-20 h-20 bg-slate-900 border border-slate-700/60 rounded-lg overflow-hidden flex items-center justify-center shrink-0">
+                        <img 
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=${encodeURIComponent('GUEST:' + activeGuest.id + '::' + activeGuest.name)}`} 
+                          alt="QR Code" 
+                          className="w-16 h-16 rounded"
+                          referrerPolicy="no-referrer"
+                        />
+                        {/* Flashing scanner laser line beam overlay */}
+                        {scanStatus === 'scanning' && (
+                          <div className="absolute inset-0 bg-indigo-500/20 flex items-center justify-center">
+                            <div className="w-full h-0.5 bg-rose-500 absolute top-1/2 left-0 animate-bounce shadow-[0_0_8px_rgba(239,68,68,1)]"></div>
+                          </div>
+                        )}
+                        {scanStatus === 'success' && (
+                          <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
+                            <span className="text-emerald-400 font-bold text-lg">✓</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 space-y-1.5 w-full">
+                        <div className="space-y-0.5 text-[10px]">
+                          <span className="block text-slate-500 font-mono uppercase tracking-wider text-[8px]">QR Ticket Payload:</span>
+                          <span className="block font-mono text-indigo-300 break-all font-semibold leading-tight">
+                            GUEST_{activeGuest.id}_{activeGuest.id_passport.substring(0, 5)}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSimulateScan(selectedScanGuestId)}
+                          disabled={scanStatus === 'scanning'}
+                          className={`w-full py-1.5 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 ${
+                            scanStatus === 'success' 
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' 
+                              : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md'
+                          }`}
+                        >
+                          <ScanLine className="w-3.5 h-3.5" />
+                          <span>
+                            {scanStatus === 'scanning' ? 'Processing...' : 
+                             scanStatus === 'success' ? 'Verification OK ✓' : 'Simulate Scanner Cam'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {scanStatus === 'success' && scannedGuestInfo && (
+                  <div className="bg-emerald-500/5 border border-emerald-500/20 p-2.5 rounded-lg flex items-start gap-2 text-[10px] text-emerald-400 animate-in fade-in duration-300">
+                    <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Credential decoded:</span> {scannedGuestInfo.name} has been pre-selected. Ready for checkout rate calculations.
+                    </div>
+                  </div>
+                )}
               </div>
 
               <form onSubmit={executeCheckIn} className="space-y-4">

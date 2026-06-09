@@ -1,16 +1,27 @@
 import React from 'react';
-import { Room, Transaction } from '../types';
+import { Room, Transaction, Reservation } from '../types';
 import { ArrowUpRight, ArrowDownRight, Bed, Home, Users, DollarSign, Activity, AlertCircle } from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  Cell
+} from 'recharts';
 
 interface DashboardProps {
   rooms: Room[];
   transactions: Transaction[];
+  reservations: Reservation[];
   lang: string;
   t: (key: string) => string;
   setActiveTab: (tab: string) => void;
 }
 
-export default function Dashboard({ rooms, transactions, lang, t, setActiveTab }: DashboardProps) {
+export default function Dashboard({ rooms, transactions, reservations, lang, t, setActiveTab }: DashboardProps) {
   // Calculations
   const totalRooms = rooms.length;
   const availableRooms = rooms.filter(r => r.status === 'Available').length;
@@ -40,6 +51,78 @@ export default function Dashboard({ rooms, transactions, lang, t, setActiveTab }
     }
     return acc;
   }, {});
+
+  // Dynamic calculation of monthly occupancy rate based on reservations
+  const monthsList = [
+    { name: 'Jan', monthIndex: 0, days: 31 },
+    { name: 'Feb', monthIndex: 1, days: 28 },
+    { name: 'Mar', monthIndex: 2, days: 31 },
+    { name: 'Apr', monthIndex: 3, days: 30 },
+    { name: 'May', monthIndex: 4, days: 31 },
+    { name: 'Jun', monthIndex: 5, days: 30 },
+    { name: 'Jul', monthIndex: 6, days: 31 },
+    { name: 'Aug', monthIndex: 7, days: 31 },
+    { name: 'Sep', monthIndex: 8, days: 30 },
+    { name: 'Oct', monthIndex: 9, days: 31 },
+    { name: 'Nov', monthIndex: 10, days: 30 },
+    { name: 'Dec', monthIndex: 11, days: 31 }
+  ];
+
+  const totalRoomsCount = totalRooms || 1;
+  const targetYear = 2026;
+
+  const chartData = monthsList.map(m => {
+    let occupiedDays = 0;
+    const monthStart = new Date(targetYear, m.monthIndex, 1);
+    const monthEnd = new Date(targetYear, m.monthIndex, m.days);
+    let bookingsInMonth = 0;
+
+    reservations.forEach(r => {
+      if (r.status === 'Cancelled') return;
+
+      const rStart = new Date(r.checkin);
+      const rEnd = new Date(r.checkout);
+
+      if (isNaN(rStart.getTime()) || isNaN(rEnd.getTime())) return;
+
+      const overlapStart = new Date(Math.max(rStart.getTime(), monthStart.getTime()));
+      const overlapEnd = new Date(Math.min(rEnd.getTime(), monthEnd.getTime()));
+
+      if (overlapStart <= overlapEnd) {
+        bookingsInMonth += 1;
+        const diffTime = overlapEnd.getTime() - overlapStart.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        occupiedDays += diffDays;
+      }
+    });
+
+    const totalPossibleDays = totalRoomsCount * m.days;
+    const rate = Math.min(100, Math.round((occupiedDays / totalPossibleDays) * 100));
+
+    return {
+      month: lang === 'en' ? m.name : `ខែ${m.monthIndex + 1}`,
+      rate: rate || 0,
+      bookings: bookingsInMonth
+    };
+  });
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-slate-900 border border-slate-700/85 p-3 rounded-xl shadow-2xl space-y-1">
+          <p className="text-xs font-bold text-slate-100">{payload[0].payload.month}</p>
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-indigo-400">
+            <span>{lang === 'en' ? 'Occupancy Rate' : 'អត្រាស្នាក់នៅ'}:</span>
+            <span className="text-white">{payload[0].value}%</span>
+          </div>
+          <p className="text-[10px] text-slate-400">
+            {lang === 'en' ? 'Active Bookings' : 'ការកក់សរុប'}: {payload[0].payload.bookings}
+          </p>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="space-y-6">
@@ -277,6 +360,67 @@ export default function Dashboard({ rooms, transactions, lang, t, setActiveTab }
             <span>System Host: Cloud Run</span>
             <span className="font-mono bg-slate-900 border border-slate-700 px-1.5 py-0.5 rounded text-[10px]">v12.0.4-L12</span>
           </div>
+        </div>
+      </div>
+
+      {/* Recharts Monthly Occupancy Analysis Bar Chart */}
+      <div className="bg-slate-800/40 border border-slate-700/70 p-6 rounded-2xl shadow-sm">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-700 pb-4 mb-5">
+          <div>
+            <h4 className="font-bold text-slate-100 text-sm flex items-center gap-2 uppercase tracking-wide">
+              <Activity className="w-4.5 h-4.5 text-indigo-400 shrink-0" />
+              <span>{lang === 'en' ? 'Reservations-Based Occupancy Analysis (2026)' : 'ការវិភាគអត្រាស្នាក់នៅផ្អែកលើការកក់បន្ទប់ (២០២៦)'}</span>
+            </h4>
+            <p className="text-xs text-slate-400 mt-1">
+              {lang === 'en' 
+                ? 'Calculated dynamics matching confirmed stays, active intervals, and daily database bookings.' 
+                : 'លទ្ធផលគណនាដោយស្វ័យប្រវត្តិតាមរយៈកាលបរិច្ឆេទនៃការកក់ និងការស្នាក់នៅរបស់ភ្ញៀវពិតប្រាកដ។'}
+            </p>
+          </div>
+          <div className="flex items-center gap-2 text-[11px] font-semibold text-indigo-300 bg-slate-900/60 border border-slate-700/50 px-3 py-1 rounded-lg">
+            <span className="w-2.5 h-2.5 rounded bg-indigo-500 animate-pulse"></span>
+            <span>{lang === 'en' ? 'Occupancy Intensity %' : 'ភាគរយអត្រាស្នាក់នៅ'}</span>
+          </div>
+        </div>
+
+        <div className="w-full h-72">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} />
+              <XAxis 
+                dataKey="month" 
+                stroke="#64748b" 
+                fontSize={11} 
+                tickLine={false} 
+                axisLine={false} 
+              />
+              <YAxis 
+                stroke="#64748b" 
+                fontSize={11} 
+                tickLine={false} 
+                axisLine={false}
+                domain={[0, 100]}
+                tickFormatter={(val) => `${val}%`}
+              />
+              <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b', opacity: 0.15 }} />
+              <Bar 
+                dataKey="rate" 
+                fill="#6366f1" 
+                radius={[4, 4, 0, 0]}
+                maxBarSize={45}
+              >
+                {chartData.map((entry, index) => {
+                  const isJune = index === 5; // Highlight June (current month target)
+                  return (
+                    <Cell 
+                      key={`cell-${index}`} 
+                      fill={isJune ? '#818cf8' : entry.rate > 40 ? '#6366f1' : entry.rate > 20 ? '#4f46e5' : '#312e81'} 
+                    />
+                  );
+                })}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
