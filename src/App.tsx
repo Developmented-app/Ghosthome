@@ -60,7 +60,7 @@ import {
 } from 'lucide-react';
 
 export default function App() {
-  const [lang, setLang] = useState<'en' | 'kh'>('en');
+  const [lang, setLang] = useState<'en' | 'kh' | 'vi' | 'ch' | 'jp'>('en');
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
   const [activeTab, setActiveTab] = useState<string>('dashboard');
   const [branch, setBranch] = useState<string>('Phnom Penh Headquarters');
@@ -227,19 +227,42 @@ export default function App() {
             </select>
           </div>
 
-          {/* Bilingual Switcher */}
+          {/* 5-Language Switcher */}
           <div className="flex bg-slate-800/80 p-0.5 rounded-xl border border-slate-700/60 text-[10px] font-bold">
             <button
               onClick={() => { setLang('en'); triggerToast("Language set to English."); }}
-              className={`px-2.5 py-1 rounded-lg ${lang === 'en' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              className={`px-2 py-1 rounded-lg transition duration-150 cursor-pointer ${lang === 'en' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+              title="English"
             >
               EN
             </button>
             <button
               onClick={() => { setLang('kh'); triggerToast("ភាសាត្រូវបានផ្លាស់ប្តូរទៅជាភាសាខ្មែរ។"); }}
-              className={`px-2.5 py-1 rounded-lg ${lang === 'kh' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+              className={`px-2 py-1 rounded-lg transition duration-150 cursor-pointer ${lang === 'kh' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+              title="ភាសាខ្មែរ"
             >
-              ខ្មែរ
+              KH
+            </button>
+            <button
+              onClick={() => { setLang('vi'); triggerToast("Đã chuyển sang Tiếng Việt."); }}
+              className={`px-2 py-1 rounded-lg transition duration-150 cursor-pointer ${lang === 'vi' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+              title="Tiếng Việt"
+            >
+              VI
+            </button>
+            <button
+              onClick={() => { setLang('ch'); triggerToast("已切换到简体中文。"); }}
+              className={`px-2 py-1 rounded-lg transition duration-150 cursor-pointer ${lang === 'ch' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+              title="中文"
+            >
+              CH
+            </button>
+            <button
+              onClick={() => { setLang('jp'); triggerToast("日本語に切り替えました。"); }}
+              className={`px-2 py-1 rounded-lg transition duration-150 cursor-pointer ${lang === 'jp' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-white'}`}
+              title="日本語"
+            >
+              JP
             </button>
           </div>
 
@@ -359,6 +382,8 @@ export default function App() {
               t={t}
               triggerToast={triggerToast}
               exchangeRate={exchangeRate}
+              crmNotes={crmNotes}
+              setCrmNotes={setCrmNotes}
             />
           )}
 
@@ -405,6 +430,8 @@ export default function App() {
               lang={lang} 
               t={t} 
               triggerToast={triggerToast} 
+              reservations={reservations}
+              setReservations={setReservations}
             />
           )}
 

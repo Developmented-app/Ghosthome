@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { Room, Transaction, Guest } from '../types';
-import { KeyRound, ArrowLeftRight, CreditCard, Receipt, Milestone, Plus, RefreshCw, FileText, CheckCircle, QrCode, ScanLine } from 'lucide-react';
+import { Room, Transaction, Guest, Reservation } from '../types';
+import { KeyRound, ArrowLeftRight, CreditCard, Receipt, Milestone, Plus, RefreshCw, FileText, CheckCircle, QrCode, ScanLine, CalendarDays, Smartphone, Sparkles, Download, Check } from 'lucide-react';
 
 interface CheckInOutProps {
   rooms: Room[];
@@ -11,15 +11,25 @@ interface CheckInOutProps {
   lang: string;
   t: (key: string) => string;
   triggerToast: (msg: string) => void;
+  reservations: Reservation[];
+  setReservations: React.Dispatch<React.SetStateAction<Reservation[]>>;
 }
 
-export default function CheckInOut({ rooms, setRooms, transactions, setTransactions, guests, lang, t, triggerToast }: CheckInOutProps) {
+export default function CheckInOut({ rooms, setRooms, transactions, setTransactions, guests, lang, t, triggerToast, reservations, setReservations }: CheckInOutProps) {
   const [activeSubTab, setActiveSubTab] = useState<'checkin' | 'checkout'>('checkin');
 
   // QR Code fast-scan console simulation states
+  const [scanType, setScanType] = useState<'guest' | 'reservation'>('reservation');
   const [selectedScanGuestId, setSelectedScanGuestId] = useState<string>('');
+  const [selectedScanReservationId, setSelectedScanReservationId] = useState<string>('');
   const [scanStatus, setScanStatus] = useState<'idle' | 'scanning' | 'success'>('idle');
   const [scannedGuestInfo, setScannedGuestInfo] = useState<Guest | null>(null);
+  const [scannedReservationInfo, setScannedReservationInfo] = useState<Reservation | null>(null);
+
+  // Reservation Guest Generator state
+  const [selectedGeneratorResId, setSelectedGeneratorResId] = useState<string>(
+    reservations && reservations.length > 0 ? String(reservations[0].id) : ''
+  );
 
   // CheckIn Form States
   const [guestName, setGuestName] = useState('');
@@ -75,9 +85,58 @@ export default function CheckInOut({ rooms, setRooms, transactions, setTransacti
     setTimeout(() => {
       setScanStatus('success');
       setScannedGuestInfo(targetGuest);
+      setScannedReservationInfo(null); // Clear reservation scan if guest scan selected
       setGuestName(targetGuest.name); // populate guestName state to auto-fill form
       playScanSound();
       triggerToast(lang === 'en' ? `✓ QR Verified: ${targetGuest.name} auto-filled!` : `✓ បានផ្ទៀងផ្ទាត់ QR៖ បំពេញដោយស្វ័យប្រវត្តិសម្រាប់ ${targetGuest.name}!`);
+    }, 1100);
+  };
+
+  const handleSimulateReservationScan = (resIdStr: string) => {
+    if (!resIdStr) {
+      setScanStatus('idle');
+      setScannedReservationInfo(null);
+      return;
+    }
+    const targetRes = reservations.find(r => r.id === Number(resIdStr));
+    if (!targetRes) return;
+
+    setScanStatus('scanning');
+    triggerToast(lang === 'en' ? `Initializing QR Scanner Cam for reservation...` : `កំពុងដំណើរការម៉ាស៊ីនស្កេន QR សម្រាប់ការកក់...`);
+
+    setTimeout(() => {
+      setScanStatus('success');
+      setScannedReservationInfo(targetRes);
+      setScannedGuestInfo(null); // Clear guest-only selection if scanned reservation
+      
+      // Auto pre-fill the form fields for expedited check-in!
+      setGuestName(targetRes.guest_name);
+      setRoomNo(targetRes.room_no);
+      
+      // Auto look up room daily price rate
+      const matchedRoom = rooms.find(rm => rm.room_no === targetRes.room_no);
+      if (matchedRoom) {
+        setDailyRate(matchedRoom.daily_price);
+      }
+      
+      // Calculate days of stay based on checkin-checkout calendar interval details
+      if (targetRes.checkin && targetRes.checkout) {
+        const d1 = new Date(targetRes.checkin);
+        const d2 = new Date(targetRes.checkout);
+        const diffTime = Math.abs(d2.getTime() - d1.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        setDays(diffDays > 0 ? diffDays : 2);
+      } else {
+        setDays(2);
+      }
+      
+      // Set key deposit as outlined or fallback
+      setDeposit(targetRes.deposit || 20);
+
+      playScanSound();
+      triggerToast(lang === 'en' 
+        ? `✓ Booking Verified: Expeditious Check-In enabled for ${targetRes.guest_name}!` 
+        : `✓ ការកក់ត្រូវបានផ្ទៀងផ្ទាត់៖ បើកដំណើរការចុះឈ្មោះចូលរហ័សសម្រាប់ ${targetRes.guest_name}!`);
     }, 1100);
   };
 
@@ -100,6 +159,11 @@ export default function CheckInOut({ rooms, setRooms, transactions, setTransacti
 
     // Transition room to Occupied
     setRooms(prev => prev.map(r => r.room_no === roomNo ? { ...r, status: 'Occupied' } : r));
+
+    // Transition reservation to Confirmed if checked in
+    if (scannedReservationInfo) {
+      setReservations(prev => prev.map(res => res.id === scannedReservationInfo.id ? { ...res, status: 'Confirmed' } : res));
+    }
 
     // Register check-in transactional payment ledger
     const addedTransaction: Transaction = {
@@ -133,6 +197,11 @@ export default function CheckInOut({ rooms, setRooms, transactions, setTransacti
     setRoomNo('');
     setDays(2);
     setDeposit(20);
+    setScannedGuestInfo(null);
+    setScannedReservationInfo(null);
+    setSelectedScanGuestId('');
+    setSelectedScanReservationId('');
+    setScanStatus('idle');
   };
 
   const executeCheckOut = (e: React.FormEvent) => {
@@ -230,7 +299,7 @@ export default function CheckInOut({ rooms, setRooms, transactions, setTransacti
               </div>
 
               {/* QR FAST CHECK-IN SCANNER SIMULATOR */}
-              <div className="bg-slate-900/60 border border-indigo-500/15 rounded-xl p-4 space-y-3.5 relative overflow-hidden my-3">
+              <div className="bg-slate-900/60 border border-indigo-500/15 rounded-xl p-4 space-y-3.5 relative overflow-hidden my-3" id="qr-scanner-console-card">
                 <div className="absolute top-0 right-0 left-0 h-1 bg-gradient-to-r from-indigo-500 via-indigo-400 to-indigo-600"></div>
                 <div className="flex items-center justify-between">
                   <span className="font-bold text-[10px] text-indigo-400 uppercase tracking-wider flex items-center gap-1.5">
@@ -244,47 +313,103 @@ export default function CheckInOut({ rooms, setRooms, transactions, setTransacti
 
                 <p className="text-[10px] text-slate-400 leading-normal">
                   {lang === 'en' 
-                    ? 'Scan arrivals instantly. Select any registered profile to display their unique code. Clicking simulate automatically decodes the ticket values and populates the check-in forms.' 
-                    : 'ស្កេនការមកដល់ភ្លាមៗ។ ជ្រើសរើសព័ត៌មានភ្ញៀវ ដើម្បីបង្ហាញកូដ QR រួចស្កេនដើម្បីបំពេញព័ត៌មានដោយស្វ័យប្រវត្តិ។'}
+                    ? 'Scan arrivals instantly. Select either Guest ID Pass or Booking QR Pass to display the unique code. Clicking simulate mimics decoding and pre-fills your check-in registration.' 
+                    : 'ស្កេនការមកដល់ភ្លាមៗ។ ជ្រើសរើស កូដ QR ភ្ញៀវ ឬ កូដ QR ការកក់ ដើម្បីបង្ហាញកូដ រួចចុចស្កេនដើម្បីបំពេញព័ត៌មានដោយស្វ័យប្រវត្តិ។'}
                 </p>
 
-                <div className="space-y-1.5">
-                  <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                    {lang === 'en' ? 'Select Registered Guest QR Pass' : 'ជ្រើសរើសកូដ QR ភ្ញៀវ'}
-                  </label>
-                  <select
-                    value={selectedScanGuestId}
-                    onChange={(e) => {
-                      setSelectedScanGuestId(e.target.value);
+                {/* Scan Type Segment Controls */}
+                <div className="flex gap-1.5 bg-slate-950 p-1 rounded-lg border border-slate-850">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScanType('reservation');
                       setScanStatus('idle');
                       setScannedGuestInfo(null);
+                      setScannedReservationInfo(null);
                     }}
-                    className="w-full bg-slate-950 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-indigo-300 outline-none cursor-pointer focus:border-indigo-500 transition font-semibold"
+                    className={`flex-1 text-[10px] py-1.5 rounded-md font-bold transition-all uppercase tracking-wider leading-none cursor-pointer ${
+                      scanType === 'reservation' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                    }`}
                   >
-                    <option value="">-- {lang === 'en' ? 'Choose Guest to Simulate Scan...' : 'ជ្រើសរើសព័ត៌មានភ្ញៀវ...'} --</option>
-                    {guests.map(g => (
-                      <option key={g.id} value={g.id}>
-                        {g.name} (Passport ID: {g.id_passport})
-                      </option>
-                    ))}
-                  </select>
+                    Booking Pass
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setScanType('guest');
+                      setScanStatus('idle');
+                      setScannedGuestInfo(null);
+                      setScannedReservationInfo(null);
+                    }}
+                    className={`flex-1 text-[10px] py-1.5 rounded-md font-bold transition-all uppercase tracking-wider leading-none cursor-pointer ${
+                      scanType === 'guest' ? 'bg-indigo-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'
+                    }`}
+                  >
+                    Guest ID Pass
+                  </button>
                 </div>
 
-                {selectedScanGuestId && (() => {
+                {/* Sub-inputs based on toggle path */}
+                {scanType === 'guest' ? (
+                  <div className="space-y-1.5">
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                      {lang === 'en' ? 'Select Guest to Scan' : 'ជ្រើសរើសព័ត៌មានភ្ញៀវ'}
+                    </label>
+                    <select
+                      value={selectedScanGuestId}
+                      onChange={(e) => {
+                        setSelectedScanGuestId(e.target.value);
+                        setScanStatus('idle');
+                        setScannedGuestInfo(null);
+                      }}
+                      className="w-full bg-slate-950 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-indigo-300 outline-none cursor-pointer focus:border-indigo-500 transition font-semibold"
+                    >
+                      <option value="">-- {lang === 'en' ? 'Choose Guest to Simulate Scan...' : 'ជ្រើសរើសព័ត៌មានភ្ញៀវ...'} --</option>
+                      {guests.map(g => (
+                        <option key={g.id} value={g.id}>
+                          {g.name} (Passport ID: {g.id_passport})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="space-y-1.5">
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                      {lang === 'en' ? 'Select Guest Reservation' : 'ជ្រើសរើសការកក់ដើម្បីស្កេន'}
+                    </label>
+                    <select
+                      value={selectedScanReservationId}
+                      onChange={(e) => {
+                        setSelectedScanReservationId(e.target.value);
+                        setScanStatus('idle');
+                        setScannedReservationInfo(null);
+                      }}
+                      className="w-full bg-slate-950 border border-slate-700/60 rounded-lg px-2.5 py-1.5 text-xs text-indigo-300 outline-none cursor-pointer focus:border-indigo-500 transition font-semibold"
+                    >
+                      <option value="">-- {lang === 'en' ? 'Choose Reservation ID...' : 'ជ្រើសរើសការកក់ទុក...'} --</option>
+                      {reservations.map(r => (
+                        <option key={r.id} value={r.id}>
+                          Booking #{r.id} - {r.guest_name} (Room {r.room_no})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Render active QR Code and Simulate control block */}
+                {scanType === 'guest' && selectedScanGuestId && (() => {
                   const activeGuest = guests.find(g => g.id === Number(selectedScanGuestId));
                   if (!activeGuest) return null;
 
                   return (
                     <div className="flex items-center gap-4 bg-slate-950/80 p-3 rounded-xl border border-slate-800/80 mt-1 transition animate-in fade-in duration-200">
-                      {/* Interactive Visual Scan view Finder */}
                       <div className="relative w-20 h-20 bg-slate-900 border border-slate-700/60 rounded-lg overflow-hidden flex items-center justify-center shrink-0">
                         <img 
                           src={`https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=${encodeURIComponent('GUEST:' + activeGuest.id + '::' + activeGuest.name)}`} 
                           alt="QR Code" 
-                          className="w-16 h-16 rounded"
+                          className="w-16 h-16 rounded mb-0.5"
                           referrerPolicy="no-referrer"
                         />
-                        {/* Flashing scanner laser line beam overlay */}
                         {scanStatus === 'scanning' && (
                           <div className="absolute inset-0 bg-indigo-500/20 flex items-center justify-center">
                             <div className="w-full h-0.5 bg-rose-500 absolute top-1/2 left-0 animate-bounce shadow-[0_0_8px_rgba(239,68,68,1)]"></div>
@@ -309,7 +434,61 @@ export default function CheckInOut({ rooms, setRooms, transactions, setTransacti
                           type="button"
                           onClick={() => handleSimulateScan(selectedScanGuestId)}
                           disabled={scanStatus === 'scanning'}
-                          className={`w-full py-1.5 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 ${
+                          className={`w-full py-1.5 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer ${
+                            scanStatus === 'success' 
+                              ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' 
+                              : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md'
+                          }`}
+                        >
+                          <ScanLine className="w-3.5 h-3.5" />
+                          <span>
+                            {scanStatus === 'scanning' ? 'Processing...' : 
+                             scanStatus === 'success' ? 'Verification OK ✓' : 'Simulate Scanner Cam'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {scanType === 'reservation' && selectedScanReservationId && (() => {
+                  const activeRes = reservations.find(r => r.id === Number(selectedScanReservationId));
+                  if (!activeRes) return null;
+
+                  return (
+                    <div className="flex items-center gap-4 bg-slate-950/80 p-3 rounded-xl border border-slate-800/80 mt-1 transition animate-in fade-in duration-200">
+                      <div className="relative w-20 h-20 bg-slate-900 border border-slate-700/60 rounded-lg overflow-hidden flex items-center justify-center shrink-0">
+                        <img 
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=60x60&data=${encodeURIComponent('RESERVATION:' + activeRes.id)}`} 
+                          alt="QR Code" 
+                          className="w-16 h-16 rounded mb-0.5"
+                          referrerPolicy="no-referrer"
+                        />
+                        {scanStatus === 'scanning' && (
+                          <div className="absolute inset-0 bg-indigo-500/20 flex items-center justify-center">
+                            <div className="w-full h-0.5 bg-rose-500 absolute top-1/2 left-0 animate-bounce shadow-[0_0_8px_rgba(239,68,68,1)]"></div>
+                          </div>
+                        )}
+                        {scanStatus === 'success' && (
+                          <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center">
+                            <span className="text-emerald-400 font-bold text-lg">✓</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex-1 space-y-1.5 w-full">
+                        <div className="space-y-0.5 text-[10px]">
+                          <span className="block text-slate-500 font-mono uppercase tracking-wider text-[8px]">QR Booking Payload:</span>
+                          <span className="block font-mono text-indigo-300 break-all font-semibold leading-tight">
+                            RESERVATION_{activeRes.id}_ROOM_{activeRes.room_no}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSimulateReservationScan(selectedScanReservationId)}
+                          disabled={scanStatus === 'scanning'}
+                          className={`w-full py-1.5 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all duration-150 flex items-center justify-center gap-1.5 cursor-pointer ${
                             scanStatus === 'success' 
                               ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/30' 
                               : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-md'
@@ -331,6 +510,15 @@ export default function CheckInOut({ rooms, setRooms, transactions, setTransacti
                     <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
                     <div>
                       <span className="font-bold">Credential decoded:</span> {scannedGuestInfo.name} has been pre-selected. Ready for checkout rate calculations.
+                    </div>
+                  </div>
+                )}
+
+                {scanStatus === 'success' && scannedReservationInfo && (
+                  <div className="bg-emerald-500/5 border border-emerald-500/20 p-2.5 rounded-lg flex items-start gap-2 text-[10px] text-emerald-400 animate-in fade-in duration-300">
+                    <CheckCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div>
+                      <span className="font-bold">Reservation decoded:</span> Pre-selected guest <span className="font-semibold text-white">{scannedReservationInfo.guest_name}</span> for Room {scannedReservationInfo.room_no}. Daily cost rate and booking stay period auto-filled!
                     </div>
                   </div>
                 )}
@@ -602,13 +790,181 @@ export default function CheckInOut({ rooms, setRooms, transactions, setTransacti
                 </div>
               </div>
             ) : (
-              <div className="h-full flex flex-col items-center justify-center text-center p-8 space-y-4">
-                <Receipt className="w-12 h-12 text-slate-600 animate-pulse" />
-                <div>
-                  <span className="text-sm font-semibold text-slate-300 block">No Invoice Generated</span>
-                  <p className="text-xs text-slate-500 mt-1 max-w-sm">
-                    Complete check-in or check-out checkout forms. The physical simulated invoice layout will populate here.
+              <div className="space-y-6">
+                {/* Information status */}
+                <div className="bg-slate-900/40 border border-slate-800/40 p-4 rounded-xl flex items-center gap-3">
+                  <div className="p-2 bg-slate-800/80 rounded-lg text-slate-400">
+                    <Receipt className="w-5 h-5 shrink-0" />
+                  </div>
+                  <div>
+                    <span className="text-[11px] font-bold text-slate-300 block leading-tight">No Active Billing Invoice</span>
+                    <span className="text-[10px] text-slate-500 block leading-normal mt-0.5">
+                      Submit check-in or check-out forms to emit printable receipts here.
+                    </span>
+                  </div>
+                </div>
+
+                {/* EXPRESS RESERVATION QR PASS GENERATOR */}
+                <div className="bg-gradient-to-b from-indigo-950/40 to-slate-900/60 border border-indigo-500/10 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center justify-between border-b border-indigo-950 pb-3">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-indigo-400" />
+                      <span className="text-xs font-bold text-slate-200">Express Reservation QR Pass Generator</span>
+                    </div>
+                    <span className="text-[9px] bg-indigo-500/10 text-indigo-400 font-bold px-2 py-0.5 rounded-full border border-indigo-500/20 uppercase tracking-widest animate-pulse">
+                      Self Check-In
+                    </span>
+                  </div>
+
+                  <p className="text-[11px] text-slate-400 leading-normal">
+                    {lang === 'en'
+                      ? "Generate instant-entry check-in tokens for pre-booked stays. Guests or receptionists can present or scan this code below to instantly fill the registration desk form."
+                      : "បង្កើតកូដ QR សម្រាប់ផ្ទៀងផ្ទាត់ការកក់ភ្លាមៗខាងក្រោម ដើម្បីបំពេញព័ត៌មានកក់បន្ទប់ដោយស្វ័យប្រវត្តិ។"}
                   </p>
+
+                  <div className="space-y-1.5 no-print">
+                    <label className="block text-[9px] font-bold text-slate-400 uppercase tracking-widest">
+                      {lang === 'en' ? 'Select Target Reservation' : 'ជ្រើសរើសលេខកក់សម្រាប់ការបង្កើត QR'}
+                    </label>
+                    <select
+                      value={selectedGeneratorResId}
+                      onChange={(e) => setSelectedGeneratorResId(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-700/60 rounded-xl px-3 py-2 text-xs text-indigo-300 outline-none cursor-pointer focus:border-indigo-500 transition font-bold"
+                    >
+                      <option value="">-- Choose Reservation --</option>
+                      {reservations.map(r => (
+                        <option key={r.id} value={r.id}>
+                          Res #{r.id} - {r.guest_name} (Room {r.room_no} | Status: {r.status})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {(() => {
+                    const activeGenRes = reservations.find(r => r.id === Number(selectedGeneratorResId));
+                    if (!activeGenRes) {
+                      return (
+                        <div className="bg-slate-950/40 border border-slate-850/60 p-6 rounded-xl text-center text-slate-500 text-xs">
+                          {lang === 'en' ? 'Select a reservation from the dropdown to print its pass' : 'សូមជ្រើសរើសលេខកក់ដើម្បីទាញយកសំបុត្រ QR Pass'}
+                        </div>
+                      );
+                    }
+
+                    const checkinDate = activeGenRes.checkin || '2026-06-12';
+                    const checkoutDate = activeGenRes.checkout || '2026-06-14';
+                    const d1 = new Date(checkinDate);
+                    const d2 = new Date(checkoutDate);
+                    const diffTime = Math.abs(d2.getTime() - d1.getTime());
+                    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) || 2;
+                    const qrDataStr = `RESERVATION:${activeGenRes.id}`;
+
+                    return (
+                      <div className="space-y-4 animate-in fade-in duration-200">
+                        {/* THE DIGITAL TICKET CARD PASS */}
+                        <div 
+                          id="digital-reservation-qr-pass"
+                          className="bg-slate-950 border border-slate-800 p-5 rounded-2xl relative overflow-hidden shadow-xl"
+                        >
+                          {/* Top-Right and Left Ticket Holes */}
+                          <div className="absolute -left-3 top-1/3 w-6 h-6 bg-slate-900 border-r border-slate-800 rounded-full"></div>
+                          <div className="absolute -right-3 top-1/3 w-6 h-6 bg-slate-900 border-l border-slate-800 rounded-full"></div>
+
+                          {/* Ticket header */}
+                          <div className="flex justify-between items-start pb-3 border-b border-dashed border-slate-800 mb-4 px-2">
+                            <div>
+                              <span className="block text-[8px] font-mono text-indigo-400 uppercase tracking-widest font-bold">EXPRESS PASS</span>
+                              <span className="block text-xs font-black text-white tracking-tight uppercase">ANGKOR ROYAL</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="block text-[8px] font-mono text-slate-500 uppercase">RESERVATION ID</span>
+                              <span className="block text-xs font-mono font-bold text-indigo-300">#RES-2026-00{activeGenRes.id}</span>
+                            </div>
+                          </div>
+
+                          {/* Ticket body elements */}
+                          <div className="grid grid-cols-2 gap-y-3.5 gap-x-2 text-[11px] px-2">
+                            <div>
+                              <span className="block text-[8px] text-slate-500 uppercase tracking-wider font-mono">GUEST</span>
+                              <span className="font-bold text-white leading-tight block">{activeGenRes.guest_name}</span>
+                            </div>
+                            <div>
+                              <span className="block text-[8px] text-slate-500 uppercase tracking-wider font-mono">ROOM DETAILS</span>
+                              <span className="font-bold text-indigo-400 leading-tight block">Room {activeGenRes.room_no}</span>
+                            </div>
+                            <div>
+                              <span className="block text-[8px] text-slate-500 uppercase tracking-wider font-mono">DATES</span>
+                              <span className="font-semibold text-slate-300 leading-tight block text-[10px]">{checkinDate} → {checkoutDate}</span>
+                            </div>
+                            <div>
+                              <span className="block text-[8px] text-slate-500 uppercase tracking-wider font-mono">DURATION</span>
+                              <span className="font-bold text-slate-300 leading-tight block">{diffDays} nights</span>
+                            </div>
+                          </div>
+
+                          {/* Separator */}
+                          <div className="my-5 border-t border-dashed border-slate-800"></div>
+
+                          {/* QR CODE PLACEMENT AREA */}
+                          <div className="flex flex-col items-center justify-center p-2 bg-slate-950">
+                            <div className="p-3 bg-white rounded-xl shadow-lg inline-block border border-indigo-200">
+                              <img 
+                                src={`https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=${encodeURIComponent(qrDataStr)}`}
+                                alt={`QR Pass for Reservation #${activeGenRes.id}`}
+                                className="w-28 h-28"
+                                referrerPolicy="no-referrer"
+                              />
+                            </div>
+                            <span className="mt-3 text-[9px] font-mono text-indigo-400 uppercase tracking-widest font-bold">
+                              [ GUEST SCAN AT ARRIVAL ]
+                            </span>
+                            <span className="text-[8px] text-slate-500 text-center font-medium mt-1 leading-normal max-w-xs block">
+                              Present code on smartphone or paper ticket. Scan automatically populates search tables.
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Interactive operations buttons */}
+                        <div className="flex gap-2.5 no-print">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // Sync to Scanner scanner
+                              setScanType('reservation');
+                              setSelectedScanReservationId(String(activeGenRes.id));
+                              setScanStatus('idle');
+                              setScannedReservationInfo(null);
+                              
+                              // Visual scroll up or focus alert
+                              triggerToast(lang === 'en' 
+                                ? `✓ Synced: Reservation #${activeGenRes.id} loaded in QR Code Scanner above!` 
+                                : `✓ ភ្ជាប់រួចរាល់៖ ការកក់ #${activeGenRes.id} ត្រូវបានបញ្ចូលទៅម៉ាស៊ីនស្កេនខាងលើ!`);
+                                
+                              // Scroll into view gently
+                              document.getElementById('qr-scanner-console-card')?.scrollIntoView({ behavior: 'smooth' });
+                            }}
+                            className="flex-1 py-3 bg-indigo-600/15 hover:bg-indigo-600/25 border border-indigo-500/20 text-indigo-300 font-bold rounded-xl text-[10px] uppercase tracking-wider leading-none transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Smartphone className="w-3.5 h-3.5 shrink-0" />
+                            <span>Quick scan in simulator</span>
+                          </button>
+                          
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const oldTitle = document.title;
+                              document.title = `Reservation-Pass-RES-2026-00${activeGenRes.id}`;
+                              window.print();
+                              document.title = oldTitle;
+                            }}
+                            className="px-4 py-3 bg-slate-900 border border-slate-750 hover:bg-slate-950 text-slate-300 hover:text-white font-bold rounded-xl text-[10px] uppercase tracking-wider leading-none transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <Download className="w-3.5 h-3.5 shrink-0" />
+                            <span>Print Pass</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             )}

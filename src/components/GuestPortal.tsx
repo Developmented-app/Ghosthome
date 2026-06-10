@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Room, Guest, Reservation } from '../types';
+import { Room, Guest, Reservation, CrmNote } from '../types';
 import { 
   Calendar, 
   Search, 
@@ -39,6 +39,8 @@ interface GuestPortalProps {
   t: (key: string) => string;
   triggerToast: (msg: string) => void;
   exchangeRate: number;
+  crmNotes: CrmNote[];
+  setCrmNotes: React.Dispatch<React.SetStateAction<CrmNote[]>>;
 }
 
 // Curated stunning high-res photos for different types of suites
@@ -61,7 +63,9 @@ export default function GuestPortal({
   lang,
   t,
   triggerToast,
-  exchangeRate
+  exchangeRate,
+  crmNotes,
+  setCrmNotes
 }: GuestPortalProps) {
   // Authentication State
   const [isLoggedIn, setIsLoggedIn] = useState<boolean>(false);
@@ -95,6 +99,14 @@ export default function GuestPortal({
 
   // Navigation inside Portal (only accessible after logging in)
   const [viewState, setViewState] = useState<'browse' | 'form' | 'payment' | 'success'>('browse');
+  const [portalTab, setPortalTab] = useState<'booking' | 'feedback'>('booking');
+
+  // Feedback Form states
+  const [feedbackRating, setFeedbackRating] = useState<number>(5);
+  const [hoveredRating, setHoveredRating] = useState<number>(0);
+  const [feedbackComment, setFeedbackComment] = useState<string>('');
+  const [feedbackType, setFeedbackType] = useState<'Note' | 'Complaint' | 'Request'>('Note');
+  const [feedbackTargetRes, setFeedbackTargetRes] = useState<string>('general');
   
   // Room filtering States
   const [selectedType, setSelectedType] = useState<string>('All');
@@ -675,9 +687,49 @@ export default function GuestPortal({
       ) : (
         /* ACCESSIBLE BOOKING PORTAL WORKFLOW (DASHBOARD FOR GUEST IF LOGGED IN) */
         <div className="space-y-8">
+
+          {/* Main Direct Portal Tab Switcher */}
+          {viewState === 'browse' && (
+            <div className="flex bg-[#111c30]/85 p-1.5 rounded-2xl border border-slate-700/50 max-w-sm">
+              <button
+                type="button"
+                onClick={() => setPortalTab('booking')}
+                className={`flex-1 py-2.5 px-3 rounded-xl text-[11px] font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  portalTab === 'booking' 
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' 
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                <span>
+                  {lang === 'en' ? 'Book a Room' : 
+                   lang === 'kh' ? 'កក់បន្ទប់' :
+                   lang === 'vi' ? 'Đặt phòng' :
+                   lang === 'ch' ? '预订客房' : '部屋予約'}
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPortalTab('feedback')}
+                className={`flex-1 py-2.5 px-3 rounded-xl text-[11px] font-extrabold transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                  portalTab === 'feedback' 
+                    ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/15' 
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Star className="w-3.5 h-3.5 fill-current text-amber-400" />
+                <span>
+                  {lang === 'en' ? 'My Feedback' : 
+                   lang === 'kh' ? 'មតិយោបល់ខ្ញុំ' :
+                   lang === 'vi' ? 'Ý kiến của tôi' :
+                   lang === 'ch' ? '住宿反馈' : '私のレビュー'}
+                </span>
+              </button>
+            </div>
+          )}
           
           {/* RENDER BROWSE VIEW */}
-          {viewState === 'browse' && (
+          {viewState === 'browse' && portalTab === 'booking' && (
             <div className="space-y-6">
               
               {authedUser && authedUser.is_authorized && (
@@ -890,6 +942,242 @@ export default function GuestPortal({
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* RENDER FEEDBACK VIEW */}
+          {viewState === 'browse' && portalTab === 'feedback' && (
+            <div className="bg-[#111c30]/50 border border-slate-700/50 p-6 md:p-8 rounded-2xl shadow-xl space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
+              <div className="flex items-center gap-3 border-b border-slate-800 pb-4">
+                <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400 shadow-inner">
+                  <Star className="w-5 h-5 fill-current" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-sm text-white uppercase tracking-wider">
+                    {lang === 'en' ? 'Review & Feedback Portal' : 
+                     lang === 'kh' ? 'ប្រព័ន្ធមតិយោបល់ភ្ញៀវ' : 
+                     lang === 'vi' ? 'Cổng đánh giá & Ý kiến' : 
+                     lang === 'ch' ? '顾客意见反馈' : 'ゲストレビュー＆フィードバック'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    {lang === 'en' ? 'Tell us about your stay experience. Feedback appears in the hotel CRM instantly.' : 
+                     lang === 'kh' ? 'សូមចែករំលែកបទពិសោធន៍របស់អ្នក។ មតិយោបល់របស់អ្នកនឹងត្រូវបានបញ្ជូនទៅផ្នែកគ្រប់គ្រងភ្លាមៗ។' : 
+                     lang === 'vi' ? 'Hãy chia sẻ trải nghiệm lưu trú của bạn. Ý kiến sẽ được gửi ngay đến bộ phận quản lý.' : 
+                     lang === 'ch' ? '分享您的住宿体验。您的意见将立即显示在服务系统中。' : 'ご滞在の感想をお聞かせください。フィードバックは即座にCRMに反映されます。'}
+                  </p>
+                </div>
+              </div>
+
+              <form 
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (!feedbackComment.trim()) {
+                    triggerToast(
+                      lang === 'en' ? 'Please fill in comments fields!' : 
+                      lang === 'kh' ? 'សូមបំពេញព័ត៌មានមតិយោបល់!' : 
+                      lang === 'vi' ? 'Vui lòng cung cấp ý kiến!' : 
+                      lang === 'ch' ? '请填写意见反馈内容!' : 'コメントを入力してください！'
+                    );
+                    return;
+                  }
+
+                  const newId = crmNotes.length > 0 ? Math.max(...crmNotes.map(n => n.id)) + 1 : 1;
+                  const stars = '★'.repeat(feedbackRating) + '☆'.repeat(5 - feedbackRating);
+                  const refInfo = feedbackTargetRes === 'general' ? 'General Stay' : `Res #${feedbackTargetRes}`;
+                  
+                  const noteMsg = `[Guest Rating: ${stars} (${feedbackRating}/5 stars) | Reference: ${refInfo}]\n\n${feedbackComment.trim()}`;
+
+                  const feedbackEntry: CrmNote = {
+                    id: newId,
+                    name: authedUser?.name || 'Portal Guest',
+                    type: feedbackRating <= 2 ? 'Complaint' : 'Note',
+                    message: noteMsg,
+                    status: 'Pending',
+                    date: new Date().toISOString().split('T')[0]
+                  };
+
+                  setCrmNotes([feedbackEntry, ...crmNotes]);
+                  setFeedbackComment('');
+                  setFeedbackRating(5);
+                  setFeedbackTargetRes('general');
+                  triggerToast(
+                    lang === 'en' ? '✓ Thank you! Your feedback has been logged in our CRM.' : 
+                    lang === 'kh' ? '✓ សូមអរគុណ! មតិយោបល់របស់អ្នកត្រូវបានកត់ត្រាទុកក្នុង CRM រួចរាល់។' : 
+                    lang === 'vi' ? '✓ Cảm ơn bạn! Ý kiến của bạn đã được ghi nhận trong hệ thống CRM.' : 
+                    lang === 'ch' ? '✓ 感谢您！您的意见已被成功记录在CRM系统中。' : '✓ ありがとうございます！フィードバックがCRMシステムに登録されました。'
+                  );
+                }}
+                className="space-y-4"
+              >
+                {/* 1. Target Stay Reservation Selector */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 uppercase font-mono font-bold tracking-wide block">
+                    {lang === 'en' ? 'Associate with Booking (Optional)' : 
+                     lang === 'kh' ? 'ភ្ជាប់ជាមួយការកក់ទុក (មិនតម្រូវ)' : 
+                     lang === 'vi' ? 'Liên kết với đặt phòng (Không bắt buộc)' : 
+                     lang === 'ch' ? '关联预订（可选）' : '対象の予約に紐付ける（任意）'}
+                  </label>
+                  <select
+                    value={feedbackTargetRes}
+                    onChange={(e) => setFeedbackTargetRes(e.target.value)}
+                    className="w-full bg-[#0a0f1d] border border-slate-700/60 text-xs py-2.5 px-3 rounded-xl text-slate-200 outline-none focus:border-indigo-500 transition cursor-pointer font-semibold"
+                  >
+                    <option value="general">
+                      -- {lang === 'en' ? 'General Stay / No Booking ID' : 
+                          lang === 'kh' ? 'ការស្នាក់នៅទូទៅ / គ្មានលេខកក់' : 
+                          lang === 'vi' ? 'Trải nghiệm chung / Không có mã đặt phòng' : 
+                          lang === 'ch' ? '常规住宿 / 无预订编号' : '一般的な滞在 / 予約IDなし'} --
+                    </option>
+                    {reservations
+                      .filter(r => r.guest_name.toLowerCase().includes(authedUser?.name.toLowerCase() || ''))
+                      .map((res, index) => (
+                        <option key={index} value={res.id}>
+                          Booking #{res.id} - Room {res.room_no} ({res.checkin} → {res.checkout})
+                        </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* 2. Rating Selector */}
+                <div className="space-y-2">
+                  <span className="text-[10px] text-slate-400 uppercase font-mono font-bold tracking-wide block">
+                    {lang === 'en' ? 'Rate Your Hospitality Experience' : 
+                     lang === 'kh' ? 'វាយតម្លៃបទពិសោធន៍ស្នាក់នៅរបស់អ្នក' : 
+                     lang === 'vi' ? 'Đánh giá chất lượng phục vụ' : 
+                     lang === 'ch' ? '评分您的服务体验' : 'サービスの満足度'}
+                  </span>
+                  
+                  <div className="flex items-center gap-2.5 bg-[#0a0f1d]/40 p-3 rounded-xl border border-slate-800">
+                    <div className="flex items-center gap-1">
+                      {[1, 2, 3, 4, 5].map((starsIndex) => {
+                        const isGlow = hoveredRating >= starsIndex || (!hoveredRating && feedbackRating >= starsIndex);
+                        return (
+                          <button
+                            type="button"
+                            key={starsIndex}
+                            onMouseEnter={() => setHoveredRating(starsIndex)}
+                            onMouseLeave={() => setHoveredRating(0)}
+                            onClick={() => setFeedbackRating(starsIndex)}
+                            className="p-1 cursor-pointer transition transform hover:scale-125 duration-100"
+                          >
+                            <Star 
+                              className={`w-7 h-7 text-xs ${
+                                isGlow 
+                                  ? 'text-amber-400 fill-amber-400 drop-shadow-[0_0_6px_rgba(251,191,36,0.5)]' 
+                                  : 'text-slate-600'
+                              }`} 
+                            />
+                          </button>
+                        );
+                      })}
+                    </div>
+                    
+                    <span className="text-[11px] font-bold font-mono text-indigo-300">
+                      {(() => {
+                        const score = hoveredRating || feedbackRating;
+                        if (score === 1) {
+                          return lang === 'en' ? 'Poor' : 
+                                 lang === 'kh' ? 'មិនល្អសោះ' : 
+                                 lang === 'vi' ? 'Rất kém' : 
+                                 lang === 'ch' ? '极不满意' : '不満';
+                        }
+                        if (score === 2) {
+                          return lang === 'en' ? 'Disappointing' : 
+                                 lang === 'kh' ? 'មិនសូវពេញចិត្ត' : 
+                                 lang === 'vi' ? 'Kém' : 
+                                 lang === 'ch' ? '不太满意' : 'やや不満';
+                        }
+                        if (score === 3) {
+                          return lang === 'en' ? 'Good & Cozy' : 
+                                 lang === 'kh' ? 'ល្អបង្គួរ' : 
+                                 lang === 'vi' ? 'Tốt & Tiện nghi' : 
+                                 lang === 'ch' ? '一般 / 还行' : '普通';
+                        }
+                        if (score === 4) {
+                          return lang === 'en' ? 'Excellent Hospitality' : 
+                                 lang === 'kh' ? 'ល្អណាស់' : 
+                                 lang === 'vi' ? 'Rất tốt' : 
+                                 lang === 'ch' ? '非常满意' : '満足';
+                        }
+                        return lang === 'en' ? 'Exquisite & Pristine Stay!' : 
+                               lang === 'kh' ? 'ល្អឥតខ្ចោះ!' : 
+                               lang === 'vi' ? 'Tuyệt vời & Sang trọng!' : 
+                               lang === 'ch' ? '完美至极 / 极力推荐!' : '大変満足！';
+                      })()}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 3. Ticket type selection */}
+                <div className="space-y-1.5 text-xs">
+                  <label className="text-[10px] text-slate-400 uppercase font-mono font-bold tracking-wide block">
+                    {lang === 'en' ? 'Feedback Category' : 
+                     lang === 'kh' ? 'ប្រភេទមតិយោបល់' : 
+                     lang === 'vi' ? 'Phân loại ý kiến' : 
+                     lang === 'ch' ? '反馈类别' : 'フィードバックの分類'}
+                  </label>
+                  <div className="flex gap-2">
+                    {[
+                      { value: 'Note', labelEn: 'General Feedback', labelKh: 'មតិយោបល់ទូទៅ', labelVi: 'Ý kiến chung', labelCh: '一般反馈', labelJp: '一般意見' },
+                      { value: 'Complaint', labelEn: 'Complaint & Issue', labelKh: 'បណ្តឹងផ្សេងៗ', labelVi: 'Khiếu nại/Sự cố', labelCh: '投诉与建议', labelJp: 'クレーム・苦情' },
+                      { value: 'Request', labelEn: 'Service Request', labelKh: 'សំណើសេវាកម្ម', labelVi: 'Yêu cầu phục vụ', labelCh: '服务需求', labelJp: 'サービス要望' },
+                    ].map((cat) => (
+                      <button
+                        type="button"
+                        key={cat.value}
+                        onClick={() => setFeedbackType(cat.value as any)}
+                        className={`flex-1 py-2 px-3 rounded-xl text-[10px] font-bold border transition cursor-pointer text-center ${
+                          feedbackType === cat.value 
+                            ? 'bg-indigo-600 border-indigo-500 text-white shadow-md' 
+                            : 'bg-[#0a0f1d] border-slate-700/60 text-slate-400 hover:text-slate-200'
+                        }`}
+                      >
+                        {lang === 'en' ? cat.labelEn : 
+                         lang === 'kh' ? cat.labelKh : 
+                         lang === 'vi' ? cat.labelVi : 
+                         lang === 'ch' ? cat.labelCh : cat.labelJp}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 4. Feedback Comments Text Area */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 uppercase font-mono font-bold tracking-wide block">
+                    {lang === 'en' ? 'Your Review Comments (Required)' : 
+                     lang === 'kh' ? 'សំណេរមតិយោបល់លម្អិត (តម្រូវ)' : 
+                     lang === 'vi' ? 'Nội dung nhận xét (Bắt buộc)' : 
+                     lang === 'ch' ? '您的意见反馈内容（必填）' : 'レビュー文（必須）'}
+                  </label>
+                  <textarea
+                    rows={4}
+                    value={feedbackComment}
+                    onChange={(e) => setFeedbackComment(e.target.value)}
+                    placeholder={
+                      lang === 'en' ? 'Describe your room comfort, staff services, cleanliness, or suggestions for us...' : 
+                      lang === 'kh' ? 'ពិពណ៌នាអំពីបន្ទប់ សេវាកម្ម បុគ្គលិក ភាពស្អាត ឬអនុសាសន៍ផ្សេងៗ...' : 
+                      lang === 'vi' ? 'Mô tả mức độ thoải mái, phục vụ của nhân viên, độ sạch sẽ hoặc đề xuất của bạn...' : 
+                      lang === 'ch' ? '详细评价您的居住体验、房间卫生、服务态度及具体建议...' : 'お部屋の快適さ、スタッフの対応、清潔さなどへのご意見をご記入ください...'
+                    }
+                    className="w-full bg-[#0a0f1d] border border-slate-700/60 p-3 rounded-xl text-xs text-slate-200 outline-none focus:border-indigo-501 focus:border-indigo-500 transition resize-none font-medium leading-relaxed font-sans"
+                    required
+                  />
+                </div>
+
+                {/* 5. Button triggers */}
+                <button
+                  type="submit"
+                  className="w-full py-3 mt-2 bg-indigo-600 hover:bg-indigo-500 text-white font-extrabold text-xs rounded-xl shadow-lg hover:shadow-indigo-600/10 transition leading-none cursor-pointer text-center flex items-center justify-center gap-2"
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>
+                    {lang === 'en' ? 'Submit My Review' : 
+                     lang === 'kh' ? 'ផ្ញើមតិយោបល់របស់ខ្ញុំ' : 
+                     lang === 'vi' ? 'Gửi ý kiến đánh giá' : 
+                     lang === 'ch' ? '提交意见反馈' : 'レビューを送信する'}
+                  </span>
+                </button>
+              </form>
             </div>
           )}
 
