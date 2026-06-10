@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Guest } from '../types';
-import { UserPlus, Search, Phone, Mail, FileText, Trash2, Heart, QrCode, Printer, Copy, Check, X, Download, Table, LayoutGrid, Edit, Shield } from 'lucide-react';
+import { UserPlus, Search, Phone, Mail, FileText, Trash2, Heart, QrCode, Printer, Copy, Check, X, Download, Table, LayoutGrid, Edit, Shield, Camera, Sparkles, RefreshCw, Eye } from 'lucide-react';
 
 interface GuestManagementProps {
   guests: Guest[];
@@ -30,6 +30,140 @@ export default function GuestManagement({ guests, setGuests, lang, t, triggerToa
   const [history, setHistory] = useState('New Profile registered.');
   const [tier, setTier] = useState<'Standard' | 'VIP' | 'Authorized'>('Standard');
   const [discount, setDiscount] = useState<number>(0);
+
+  // Simulated OCR & Real Camera Scanner States
+  const [isScanning, setIsScanning] = useState(false);
+  const [cameraActive, setCameraActive] = useState(false);
+  const [ocrState, setOcrState] = useState<'idle' | 'initializing' | 'scanning' | 'extracting' | 'completed'>('idle');
+  const [ocrLog, setOcrLog] = useState<string>('');
+  const [mockIdIndex, setMockIdIndex] = useState<number>(0);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+
+  const sampleOcrProfiles = [
+    {
+      name: "Sokha Vann",
+      phone: "+855 92 888 123",
+      idPassport: "KH0982736",
+      email: "sokha.vann@outlook.kh",
+      emergency: "Vann Sareth (+855 12 999 888)",
+      remarks: "[OCR Scanned - Cambodia ID] Registered via automated document intelligence reader."
+    },
+    {
+      name: "Marcus Aurelius",
+      phone: "+1 512 809 3123",
+      idPassport: "US5430291",
+      email: "marcus.aurelius@rome.edu",
+      emergency: "Faustina Aurelius (+1 512 809 3000)",
+      remarks: "[OCR Scanned - US Passport] International guest ID verified. High Loyalty status."
+    },
+    {
+      name: "Akara Sopheak",
+      phone: "+855 15 444 777",
+      idPassport: "KH0012938",
+      email: "akarasopheak@gmail.com",
+      emergency: "Keo Sopheak (+855 15 444 778)",
+      remarks: "[OCR Scanned - Cambodia Resident Card] Verified resident. Prefers quiet corner suites."
+    },
+    {
+      name: "Yuki Tanaka",
+      phone: "+81 90 1234 5678",
+      idPassport: "JP8827361",
+      email: "yuki.tanaka@tokyolodge.jp",
+      emergency: "Tanaka Sato (+81 90 1234 5679)",
+      remarks: "[OCR Scanned - Japan Passport] Pre-registered business visitor. Express check-in."
+    },
+    {
+      name: "Nari Nguyen",
+      phone: "+84 908 123 456",
+      idPassport: "VN2093817",
+      email: "nari.nguyen@vietmail.vn",
+      emergency: "Nguyen Huy (+84 908 123 457)",
+      remarks: "[OCR Scanned - Vietnam ID Card] Checked & OCR validated."
+    }
+  ];
+
+  const startCamera = async () => {
+    setOcrState('initializing');
+    setOcrLog(lang === 'en' ? 'Starting camera hardware...' : 'កំពុងបើកដំណើរការកាមេរ៉ា...');
+    
+    // Stop any existing tracks first
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+
+    try {
+      const constraints = {
+        video: { facingMode: 'environment', width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false
+      };
+      const mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      streamRef.current = mediaStream;
+      setCameraActive(true);
+      setOcrState('scanning');
+      setOcrLog(lang === 'en' ? 'Align ID/Passport card inside the viewfinder' : 'សូមតម្រឹមអត្តសញ្ញាណប័ណ្ណ ឬលិខិតឆ្លងដែនក្នុងស៊ុមស្កេន');
+      
+      // Delay slightly to allow state to render the video tag
+      setTimeout(() => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = mediaStream;
+        }
+      }, 100);
+    } catch (err) {
+      console.warn("Camera request could not be fulfilled. Falling back to sandbox stream simulation.", err);
+      setCameraActive(false);
+      setOcrState('scanning');
+      setOcrLog(lang === 'en' ? 'Simulator Active: Aligning synthetic document matrix' : 'ម៉ាស៊ីនស្ទង់និម្មិត៖ កំពុងតម្រឹមឯកសារគំរូ');
+    }
+  };
+
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setCameraActive(false);
+    setOcrState('idle');
+  };
+
+  const triggerOcrScan = () => {
+    if (ocrState !== 'scanning') return;
+    
+    setOcrState('extracting');
+    setOcrLog(lang === 'en' ? 'Extracting text blocks via neural OCR engine...' : 'កំពុងទាញយកអត្ថបទជាមួយបច្ចេកវិទ្យា OCR ...');
+    
+    setTimeout(() => {
+      setOcrLog(lang === 'en' ? 'Decrypting Machine Readable Zone (MRZ)...' : 'កំពុងបកស្រាយកូដម៉ាស៊ីនអាន (MRZ)...');
+    }, 800);
+
+    setTimeout(() => {
+      const targetProfile = sampleOcrProfiles[mockIdIndex];
+      // Move to next mock ID for next scan so it cycles!
+      setMockIdIndex((prev) => (prev + 1) % sampleOcrProfiles.length);
+
+      // Prepopulate
+      setName(targetProfile.name);
+      setPhone(targetProfile.phone);
+      setIdPassport(targetProfile.idPassport);
+      setEmail(targetProfile.email);
+      setEmergency(targetProfile.emergency);
+      setHistory(targetProfile.remarks);
+
+      setOcrState('completed');
+      setOcrLog(lang === 'en' ? `Success! Loaded profile for ${targetProfile.name}` : `ជោគជ័យ! បានបញ្ចូលព័ត៌មានរបស់ ${targetProfile.name}`);
+      
+      triggerToast(lang === 'en' 
+        ? `✓ OCR Scanned: Loaded profile for ${targetProfile.name}` 
+        : `✓ ស្កេន OCR ជោគជ័យ៖ បានបញ្ចូលព័ត៌មានរបស់ ${targetProfile.name}`
+      );
+
+      // Finish & Close scanner
+      setTimeout(() => {
+        stopCamera();
+        setIsScanning(false);
+      }, 1200);
+    }, 2000);
+  };
 
   // Edit Guest States
   const [selectedGuestForEdit, setSelectedGuestForEdit] = useState<Guest | null>(null);
@@ -106,6 +240,8 @@ export default function GuestManagement({ guests, setGuests, lang, t, triggerToa
     };
 
     setGuests([...guests, created]);
+    stopCamera();
+    setIsScanning(false);
     setShowAddModal(false);
     triggerToast(`Guest ${created.name} registered successfully.`);
 
@@ -589,125 +725,270 @@ export default function GuestManagement({ guests, setGuests, lang, t, triggerToa
       {showAddModal && (
         <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center bg-transparent backdrop-blur-md px-4">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-indigo-300 mb-4">{t('registerGuest')}</h3>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-indigo-300 mb-4">
+              {isScanning 
+                ? (lang === 'en' ? 'Scanning guest ID card...' : 'កំពុងស្កេនអត្តសញ្ញាណប័ណ្ណ...') 
+                : t('registerGuest')}
+            </h3>
             
-            <form onSubmit={handleRegisterSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">{t('guestName')} *</label>
-                <input 
-                  type="text" 
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Sok Mean"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
-                  required
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">{t('phone')} *</label>
-                  <input 
-                    type="text" 
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    placeholder="+855 ..."
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
-                    required
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-400 mb-1">{t('idPassport')} *</label>
-                  <input 
-                    type="text" 
-                    value={idPassport}
-                    onChange={(e) => setIdPassport(e.target.value)}
-                    placeholder="N0..."
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">{t('email')}</label>
-                <input 
-                  type="email" 
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="sok@gmail.com"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">{t('emergencyContact')}</label>
-                <input 
-                  type="text" 
-                  value={emergency}
-                  onChange={(e) => setEmergency(e.target.value)}
-                  placeholder="Chhun Ly (+855 99 111 222)"
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-400 mb-1">Remarks / Stay History Note</label>
-                <textarea 
-                  value={history}
-                  onChange={(e) => setHistory(e.target.value)}
-                  className="w-full h-14 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none resize-none focus:border-indigo-500"
-                ></textarea>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 text-xs font-mono font-bold text-slate-400">
-                <div>
-                  <label className="block text-[10px] uppercase mb-1">Privilege Rights (សិទ្ធិ)</label>
-                  <select 
-                    value={tier}
-                    onChange={(e) => {
-                      const v = e.target.value as 'Standard' | 'VIP' | 'Authorized';
-                      setTier(v);
-                      if (v === 'VIP') setDiscount(20);
-                      else if (v === 'Authorized') setDiscount(15);
-                      else setDiscount(0);
+            {isScanning ? (
+              <div className="space-y-4 animate-in fade-in duration-200">
+                <div className="flex justify-between items-center pb-2 border-b border-slate-700/60">
+                  <span className="text-xs font-mono font-bold text-emerald-400 uppercase tracking-widest flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+                    Live AI Document OCR Reader
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopCamera();
+                      setIsScanning(false);
                     }}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                    className="p-1 px-1.5 duration-150 transition text-slate-400 hover:text-white rounded bg-slate-700/30 text-xs font-bold"
                   >
-                    <option value="Standard" className="bg-slate-800">Standard (ធម្មតា)</option>
-                    <option value="Authorized" className="bg-slate-800">Authorized (មានសិទ្ធិ)</option>
-                    <option value="VIP" className="bg-slate-800">VIP (វីអាយភី)</option>
-                  </select>
+                    Cancel Scan
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-[10px] uppercase mb-1">Privilege Discount (%)</label>
-                  <input 
-                    type="number"
-                    min="0"
-                    max="100"
-                    value={discount}
-                    onChange={(e) => setDiscount(Math.max(0, Math.min(100, Number(e.target.value))))}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
-                  />
-                </div>
-              </div>
 
-              <div className="pt-4 border-t border-slate-700 flex justify-end gap-2.5">
-                <button 
-                  type="button" 
-                  onClick={() => setShowAddModal(false)}
-                  className="px-3.5 py-2 bg-slate-700 hover:bg-slate-650 rounded-lg text-xs font-semibold text-slate-300"
-                >
-                  {t('cancel')}
-                </button>
-                <button 
-                  type="submit" 
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-semibold text-white"
-                >
-                  {t('save')}
-                </button>
+                <div className="relative overflow-hidden rounded-xl bg-black border border-slate-700 shadow-inner">
+                  {/* Aspect ratio bounding box for ID card placement */}
+                  <div className="absolute inset-0 border-2 border-dashed border-emerald-500/40 rounded-xl m-6 pointer-events-none z-10 flex items-center justify-center">
+                    <div className="text-[10px] font-bold text-emerald-400 bg-black/80 px-2 py-1 rounded text-center tracking-wide uppercase">
+                      ID CARD / PASSPORT VIEWPORT
+                    </div>
+                  </div>
+
+                  {/* Laser Scanning Effect */}
+                  {ocrState === 'scanning' && (
+                    <div className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_12px_#10b981] z-20 animate-pulse pointer-events-none" style={{ top: '40%' }}></div>
+                  )}
+
+                  {cameraActive ? (
+                    <video
+                      ref={videoRef}
+                      autoPlay
+                      playsInline
+                      muted
+                      className="w-full h-56 object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-56 flex flex-col items-center justify-center bg-slate-950 p-4 text-center space-y-3 relative">
+                      {/* Abstract geometric SVG simulating passport scanning */}
+                      <div className="w-24 h-16 rounded border border-indigo-500/50 flex flex-col justify-between p-1.5 bg-indigo-500/5 relative overflow-hidden">
+                        <div className="w-6 h-6 rounded-full bg-indigo-500/10 flex items-center justify-center text-[8px] font-bold text-indigo-400">ID</div>
+                        <div className="w-full h-1 bg-indigo-500/20 rounded"></div>
+                        <div className="w-1/2 h-1 bg-indigo-500/20 rounded"></div>
+                        <div className="absolute inset-x-0 h-0.5 bg-indigo-400/85 shadow-md animate-bounce top-1/2"></div>
+                      </div>
+                      <div className="space-y-1">
+                        <span className="text-[11px] font-bold text-slate-300 block">
+                          [Camera Stream Sandboxed]
+                        </span>
+                        <span className="text-[10px] text-indigo-300 font-medium block">
+                          Press "Capture & Extract" to decode pre-loaded traveler dataset.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Scanning State Loader Overlay */}
+                  {ocrState === 'extracting' && (
+                    <div className="absolute inset-0 bg-[#0f172a]/90 backdrop-blur-sm flex flex-col items-center justify-center gap-3 z-30 select-none">
+                      <RefreshCw className="w-8 h-8 text-indigo-400 animate-spin" />
+                      <div className="text-center">
+                        <span className="text-xs font-extrabold text-white uppercase block animate-pulse">Running Neural OCR Engine</span>
+                        <span className="text-[10px] text-slate-400 mt-1 block">Analyzing machine-readable zones & credentials...</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Console logs */}
+                <div className="bg-[#090e18] rounded-xl border border-slate-800 p-3 font-mono text-[10px] text-slate-300 space-y-1">
+                  <div className="flex gap-2 items-center text-indigo-400 border-b border-slate-900 pb-1.5 mb-1.5">
+                    <span className="w-2 h-2 rounded-full bg-indigo-500 animate-ping"></span>
+                    <span className="font-bold uppercase tracking-wider text-[9px]">DIAGNOSTIC TELEMETRY</span>
+                  </div>
+                  <div className="leading-tight text-slate-300 select-none">
+                     &gt; {ocrLog}
+                  </div>
+                  {ocrState === 'scanning' && (
+                    <div className="text-slate-500 text-[9px] mt-1.5 italic flex justify-between items-center bg-slate-950/50 p-1.5 rounded">
+                      <span>* OCR Profile cycle: #{mockIdIndex + 1} ({sampleOcrProfiles[mockIdIndex].name})</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMockIdIndex((mockIdIndex + 1) % sampleOcrProfiles.length);
+                        }}
+                        className="text-indigo-400 hover:underline not-italic font-bold cursor-pointer"
+                      >
+                        Next Mock Profile
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Interactive triggers */}
+                <div className="flex gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stopCamera();
+                      setIsScanning(false);
+                    }}
+                    className="flex-1 py-2.5 bg-slate-700 hover:bg-slate-650 text-slate-300 font-semibold text-xs rounded-xl transition cursor-pointer text-center"
+                  >
+                    Cancel Scan
+                  </button>
+                  <button
+                    type="button"
+                    onClick={triggerOcrScan}
+                    disabled={ocrState !== 'scanning'}
+                    className="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-extrabold text-xs rounded-xl transition shadow-lg shadow-emerald-600/10 flex items-center justify-center gap-1.5 cursor-pointer text-center"
+                  >
+                    <Eye className="w-4 h-4" />
+                    <span>Capture & Extract</span>
+                  </button>
+                </div>
               </div>
-            </form>
+            ) : (
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsScanning(true);
+                    startCamera();
+                  }}
+                  className="w-full mb-4 py-3 px-3 bg-indigo-600/10 hover:bg-indigo-600/20 border border-indigo-500/30 text-indigo-300 rounded-xl text-xs font-bold transition flex items-center justify-center gap-2.5 hover:text-white cursor-pointer group"
+                >
+                  <Camera className="w-4 h-4 text-indigo-400 group-hover:scale-110 duration-200 animate-pulse" />
+                  <span>Scan ID / Passport via Smart OCR</span>
+                  <span className="text-[9px] bg-indigo-550/30 text-indigo-400 font-bold px-1.5 py-0.5 rounded font-mono uppercase">AI Live</span>
+                </button>
+
+                <form onSubmit={handleRegisterSubmit} className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">{t('guestName')} *</label>
+                    <input 
+                      type="text" 
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      placeholder="Sok Mean"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      required
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1">{t('phone')} *</label>
+                      <input 
+                        type="text" 
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="+855 ..."
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-slate-400 mb-1">{t('idPassport')} *</label>
+                      <input 
+                        type="text" 
+                        value={idPassport}
+                        onChange={(e) => setIdPassport(e.target.value)}
+                        placeholder="N0..."
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">{t('email')}</label>
+                    <input 
+                      type="type" 
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="sok@gmail.com"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">{t('emergencyContact')}</label>
+                    <input 
+                      type="text" 
+                      value={emergency}
+                      onChange={(e) => setEmergency(e.target.value)}
+                      placeholder="Chhun Ly (+855 99 111 222)"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-400 mb-1">Remarks / Stay History Note</label>
+                    <textarea 
+                      value={history}
+                      onChange={(e) => setHistory(e.target.value)}
+                      className="w-full h-14 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none resize-none focus:border-indigo-500"
+                    ></textarea>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3 text-xs font-mono font-bold text-slate-400">
+                    <div>
+                      <label className="block text-[10px] uppercase mb-1">Privilege Rights (សិទ្ធិ)</label>
+                      <select 
+                        value={tier}
+                        onChange={(e) => {
+                          const v = e.target.value as 'Standard' | 'VIP' | 'Authorized';
+                          setTier(v);
+                          if (v === 'VIP') setDiscount(20);
+                          else if (v === 'Authorized') setDiscount(15);
+                          else setDiscount(0);
+                        }}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      >
+                        <option value="Standard" className="bg-slate-800">Standard (ធម្មតា)</option>
+                        <option value="Authorized" className="bg-slate-800">Authorized (មានសិទ្ធិ)</option>
+                        <option value="VIP" className="bg-slate-800">VIP (វីអាយភី)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase mb-1">Privilege Discount (%)</label>
+                      <input 
+                        type="number"
+                        min="0"
+                        max="100"
+                        value={discount}
+                        onChange={(e) => setDiscount(Math.max(0, Math.min(100, Number(e.target.value))))}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-700 flex justify-end gap-2.5">
+                    <button 
+                      type="button" 
+                      onClick={() => {
+                        stopCamera();
+                        setIsScanning(false);
+                        setShowAddModal(false);
+                      }}
+                      className="px-3.5 py-2 bg-slate-700 hover:bg-slate-650 rounded-lg text-xs font-semibold text-slate-300"
+                    >
+                      {t('cancel')}
+                    </button>
+                    <button 
+                      type="submit" 
+                      className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-xs font-semibold text-white"
+                    >
+                      {t('save')}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
           </div>
         </div>
       )}

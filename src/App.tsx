@@ -33,9 +33,11 @@ import CrmNotepad from './components/CrmNotepad';
 import Reports from './components/Reports';
 import DevHub from './components/DevHub';
 import GuestPortal from './components/GuestPortal';
+import FloorMap from './components/FloorMap';
 
 import {
   LayoutDashboard,
+  Map,
   Home,
   Users,
   CalendarDays,
@@ -148,6 +150,7 @@ export default function App() {
 
   const menuItems = [
     { id: 'dashboard', label: t('dashboard'), icon: LayoutDashboard },
+    { id: 'floorMap', label: t('floorMap'), icon: Map },
     { id: 'guestPortal', label: t('guestPortal'), icon: Sparkles },
     { id: 'rooms', label: t('roomManagement'), icon: Home },
     { id: 'guests', label: t('guestManagement'), icon: Users },
@@ -367,6 +370,21 @@ export default function App() {
               lang={lang} 
               t={t} 
               setActiveTab={setActiveTab} 
+            />
+          )}
+
+          {activeTab === 'floorMap' && (
+            <FloorMap
+              rooms={rooms}
+              setRooms={setRooms}
+              reservations={reservations}
+              setReservations={setReservations}
+              guests={guests}
+              lang={lang}
+              t={t}
+              triggerToast={triggerToast}
+              setActiveTab={setActiveTab}
+              theme={theme}
             />
           )}
 

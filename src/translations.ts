@@ -2,6 +2,7 @@ export const translations = {
   en: {
     title: "Guesthouse Management System",
     dashboard: "Dashboard",
+    floorMap: "Floor Map",
     roomManagement: "Room Management",
     guestManagement: "Guest Management",
     reservations: "Reservation System",
@@ -107,6 +108,7 @@ export const translations = {
   kh: {
     title: "ប្រព័ន្ធគ្រប់គ្រងផ្ទះសំណាក់",
     dashboard: "ផ្ទាំងគ្រប់គ្រង",
+    floorMap: "ផែនទីរបៀងបន្ទប់",
     roomManagement: "គ្រប់គ្រងបន្ទប់",
     guestManagement: "គ្រប់គ្រងភ្ញៀវ",
     reservations: "ប្រព័ន្ធកក់បន្ទប់",
@@ -212,6 +214,7 @@ export const translations = {
   vi: {
     title: "Hệ thống Quản lý Nhà nghỉ",
     dashboard: "Bảng điều khiển",
+    floorMap: "Sơ đồ Phòng",
     roomManagement: "Quản lý Phòng",
     guestManagement: "Quản lý Khách",
     reservations: "Hệ thống Đặt phòng",
@@ -317,6 +320,7 @@ export const translations = {
   ch: {
     title: "旅馆管理系统",
     dashboard: "仪表板",
+    floorMap: "楼层平面图",
     roomManagement: "客房管理",
     guestManagement: "宾客管理",
     reservations: "预订系统",
@@ -422,6 +426,7 @@ export const translations = {
   zh: {
     title: "旅馆管理系统",
     dashboard: "仪表板",
+    floorMap: "楼层平面图",
     roomManagement: "客房管理",
     guestManagement: "宾客管理",
     reservations: "预订系统",
@@ -527,6 +532,7 @@ export const translations = {
   jp: {
     title: "ゲストハウス管理システム",
     dashboard: "ダッシュボード",
+    floorMap: "フロアマップ",
     roomManagement: "客室管理",
     guestManagement: "顧客管理",
     reservations: "予約システム",

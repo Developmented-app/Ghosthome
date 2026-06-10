@@ -1,6 +1,6 @@
 {
   "name": "Guesthouse Management System",
   "description": "An interactive Cambodian Guesthouse Management System featuring comprehensive room catalogs, guest registries, billing controllers, utility calculators, payroll ledgers, and a bilingual interface.",
-  "requestFramePermissions": [],
+  "requestFramePermissions": ["camera"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
