@@ -11,6 +11,7 @@ import {
   ResponsiveContainer,
   Cell
 } from 'recharts';
+import WeatherWidget from './WeatherWidget';
 
 interface DashboardProps {
   rooms: Room[];
@@ -856,36 +857,42 @@ export default function Dashboard({ rooms, transactions, reservations, lang, t, 
         </div>
       </div>
 
-      {/* Room Category Matrix */}
-      <div className="bg-slate-800/40 border border-slate-700/70 p-6 rounded-2xl">
-        <h4 className="font-semibold text-slate-100 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
-          <span>{lang === 'en' ? 'Category Occupancy Matrix' : 'ម៉ាទ្រីសបន្ទប់តាមប្រភេទ'}</span>
-        </h4>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {Object.entries(roomTypes).map(([type, stats]) => {
-            const percentage = stats.total > 0 ? Math.round((stats.occupied / stats.total) * 100) : 0;
-            return (
-              <div key={type} className="bg-slate-900/40 p-4 rounded-xl border border-slate-700/50 flex flex-col justify-between">
-                <div>
-                  <span className="text-xs font-semibold text-indigo-300">{type}</span>
-                  <div className="flex items-baseline gap-1.5 mt-2">
-                    <span className="text-lg font-bold text-slate-100">{stats.occupied}</span>
-                    <span className="text-xs text-slate-400">/ {stats.total} {lang === 'en' ? 'busy' : 'មានភ្ញៀវ'}</span>
+      {/* Category Occupancy Matrix & weather forecast hub */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Room Category Matrix */}
+        <div className="bg-slate-800/40 border border-slate-700/70 p-6 rounded-2xl lg:col-span-2">
+          <h4 className="font-semibold text-slate-100 mb-4 flex items-center gap-2 text-sm uppercase tracking-wide">
+            <span>{lang === 'en' ? 'Category Occupancy Matrix' : 'ម៉ាទ្រីសបន្ទប់តាមប្រភេទ'}</span>
+          </h4>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {Object.entries(roomTypes).map(([type, stats]) => {
+              const percentage = stats.total > 0 ? Math.round((stats.occupied / stats.total) * 100) : 0;
+              return (
+                <div key={type} className="bg-slate-900/40 p-4 rounded-xl border border-slate-700/50 flex flex-col justify-between">
+                  <div>
+                    <span className="text-xs font-semibold text-indigo-300">{type}</span>
+                    <div className="flex items-baseline gap-1.5 mt-2">
+                      <span className="text-lg font-bold text-slate-100">{stats.occupied}</span>
+                      <span className="text-xs text-slate-400">/ {stats.total} {lang === 'en' ? 'busy' : 'មានភ្ញៀវ'}</span>
+                    </div>
+                  </div>
+                  <div className="mt-4">
+                    <div className="flex justify-between items-center text-[10px] text-slate-400 mb-1">
+                      <span>Usage percentage</span>
+                      <span className="font-semibold">{percentage}%</span>
+                    </div>
+                    <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                      <div className="bg-indigo-500 h-full" style={{ width: `${percentage}%` }}></div>
+                    </div>
                   </div>
                 </div>
-                <div className="mt-4">
-                  <div className="flex justify-between items-center text-[10px] text-slate-400 mb-1">
-                    <span>Usage percentage</span>
-                    <span className="font-semibold">{percentage}%</span>
-                  </div>
-                  <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
-                    <div className="bg-indigo-500 h-full" style={{ width: `${percentage}%` }}></div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
+
+        {/* Dynamic Location-Aware Weather Widget */}
+        <WeatherWidget lang={lang} />
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Room, SystemNotification } from '../types';
-import { Plus, Trash2, Search, Filter, ShieldAlert, CheckCircle, PenTool, Bed, LayoutGrid, Map, Activity, Circle, Settings2, Calendar, Wrench, Clock } from 'lucide-react';
+import { Plus, Trash2, Search, Filter, ShieldAlert, CheckCircle, PenTool, Bed, LayoutGrid, Map, Activity, Circle, Settings2, Calendar, Wrench, Clock, AlertTriangle, RefreshCw } from 'lucide-react';
 
 const getRoomLastServicedDate = (roomNo: string) => {
   const mapping: Record<string, { date: string, notes: string }> = {
@@ -31,8 +31,73 @@ export default function RoomManagement({ rooms, setRooms, notifications, lang, t
   const [showAddModal, setShowAddModal] = useState(false);
   
   // Custom interactive states for floor plan
-  const [viewMode, setViewMode] = useState<'catalog' | 'floorplan'>('catalog');
+  const [viewMode, setViewMode] = useState<'catalog' | 'floorplan' | 'inventory'>('catalog');
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
+
+  // Room Inventory State
+  const [roomInventories, setRoomInventories] = useState<Record<string, { name: string; quantity: number; minRequired: number; }[]>>(() => {
+    const saved = localStorage.getItem('guest_house_room_inventory');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        // fallback
+      }
+    }
+    
+    // Default values matched with template rooms
+    const defaultInventory: Record<string, { name: string; quantity: number; minRequired: number; }[]> = {};
+    const initialRooms = ['101', '102', '201', '202', '301', '302', '401'];
+    initialRooms.forEach(rNo => {
+      defaultInventory[rNo] = [
+        { name: 'Towels', quantity: 4, minRequired: 2 },
+        { name: 'Soaps', quantity: 3, minRequired: 2 },
+        { name: 'Remote Controls', quantity: 1, minRequired: 1 },
+        { name: 'Bed Sheets', quantity: 2, minRequired: 2 },
+        { name: 'Toilet Paper', quantity: 5, minRequired: 3 }
+      ];
+    });
+
+    // Seed some low stock alerts for interactive demo quality!
+    if (defaultInventory['102']) {
+      defaultInventory['102'][0].quantity = 1; // Towels (low - min is 2)
+      defaultInventory['102'][1].quantity = 0; // Soaps (low - min is 2)
+    }
+    if (defaultInventory['201']) {
+      defaultInventory['201'][2].quantity = 0; // Remote missing (low - min is 1)
+    }
+    if (defaultInventory['302']) {
+      defaultInventory['302'][4].quantity = 1; // Toilet Paper low (low - min is 3)
+    }
+    return defaultInventory;
+  });
+
+  const updateRoomInventory = (rNo: string, itemName: string, newQty: number) => {
+    setRoomInventories(prev => {
+      const updated = { ...prev };
+      if (!updated[rNo]) {
+        updated[rNo] = [
+          { name: 'Towels', quantity: 4, minRequired: 2 },
+          { name: 'Soaps', quantity: 3, minRequired: 2 },
+          { name: 'Remote Controls', quantity: 1, minRequired: 1 },
+          { name: 'Bed Sheets', quantity: 2, minRequired: 2 },
+          { name: 'Toilet Paper', quantity: 5, minRequired: 3 }
+        ];
+      }
+      updated[rNo] = updated[rNo].map(item => 
+        item.name === itemName ? { ...item, quantity: Math.max(0, newQty) } : item
+      );
+      localStorage.setItem('guest_house_room_inventory', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const getRoomInventoryStatus = (rNo: string) => {
+    const items = roomInventories[rNo] || [];
+    if (items.length === 0) return 'OK';
+    const lowItems = items.filter(i => i.quantity < i.minRequired);
+    return lowItems.length > 0 ? 'LOW' : 'OK';
+  };
 
   // Helper to check if a room has a pending utility task
   const hasPendingUtilityTask = (roomNo: string) => {
@@ -67,6 +132,10 @@ export default function RoomManagement({ rooms, setRooms, notifications, lang, t
   const [capacity, setCapacity] = useState(2);
   const [dailyPrice, setDailyPrice] = useState(25);
   const [monthlyPrice, setMonthlyPrice] = useState(350);
+
+  // Inventory Filter/Search UI States
+  const [invSearch, setInvSearch] = useState('');
+  const [invFilterLow, setInvFilterLow] = useState(false);
 
   // Dynamic automatic computation helper
   const handleTypeChange = (type: string) => {
@@ -114,6 +183,21 @@ export default function RoomManagement({ rooms, setRooms, notifications, lang, t
     };
 
     setRooms([...rooms, created]);
+    
+    // Initialize room inventory
+    setRoomInventories(prev => {
+      const updated = { ...prev };
+      updated[created.room_no] = [
+        { name: 'Towels', quantity: 4, minRequired: 2 },
+        { name: 'Soaps', quantity: 3, minRequired: 2 },
+        { name: 'Remote Controls', quantity: 1, minRequired: 1 },
+        { name: 'Bed Sheets', quantity: 2, minRequired: 2 },
+        { name: 'Toilet Paper', quantity: 5, minRequired: 3 }
+      ];
+      localStorage.setItem('guest_house_room_inventory', JSON.stringify(updated));
+      return updated;
+    });
+
     setShowAddModal(false);
     triggerToast(`Room ${created.room_no} [${created.type}] added.`);
     
@@ -215,6 +299,26 @@ export default function RoomManagement({ rooms, setRooms, notifications, lang, t
             >
               <Map className="w-3.5 h-3.5" />
               <span>Floor Plan</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setViewMode('inventory'); setSelectedRoomId(null); }}
+              className={`flex items-center gap-1.5 px-3 py-1 rounded-md transition-all relative ${
+                viewMode === 'inventory' 
+                  ? 'bg-indigo-600 text-white shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Activity className="w-3.5 h-3.5" />
+              <span>Inventory Tracking</span>
+              {Object.keys(roomInventories).some(rNo => getRoomInventoryStatus(rNo) === 'LOW') && (
+                <span className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-rose-500 rounded-full animate-ping" />
+              )}
+              {Object.keys(roomInventories).some(rNo => getRoomInventoryStatus(rNo) === 'LOW') && (
+                <span className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-rose-600 rounded-full text-[7px] text-white font-black flex items-center justify-center border border-slate-900" title="Low Stocks Alert!">
+                  {Object.keys(roomInventories).filter(rNo => getRoomInventoryStatus(rNo) === 'LOW').length}
+                </span>
+              )}
             </button>
           </div>
 
@@ -395,7 +499,7 @@ export default function RoomManagement({ rooms, setRooms, notifications, lang, t
             </div>
           )}
         </div>
-      ) : (
+      ) : viewMode === 'floorplan' ? (
         <div className="space-y-8 animate-in fade-in duration-300">
           {/* Interactive Legend panel */}
           <div className="flex flex-wrap items-center gap-6 bg-slate-800/40 p-4 rounded-xl border border-slate-700/60 text-xs">
@@ -662,6 +766,317 @@ export default function RoomManagement({ rooms, setRooms, notifications, lang, t
               </div>
             );
           })()}
+        </div>
+      ) : (
+        /* INVENTORY TRACKING VIEW */
+        <div className="space-y-6 animate-in fade-in duration-300">
+          
+          {/* Inventory Health Dashboard Header row */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-slate-900/40 p-4 border border-slate-700/60 rounded-2xl flex items-center justify-between shadow-sm">
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Currently Monitored Rooms</span>
+                <span className="text-2xl font-black text-white font-mono mt-0.5 block">{rooms.length} Rooms</span>
+              </div>
+              <div className="p-3 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-xl">
+                <Settings2 className="w-5 h-5" />
+              </div>
+            </div>
+
+            <div className="bg-slate-900/40 p-4 border border-slate-700/60 rounded-2xl flex items-center justify-between shadow-sm">
+              <div>
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">Rooms Needing Restock</span>
+                <span className={`text-2xl font-black font-mono mt-0.5 block ${
+                  Object.keys(roomInventories).filter(r => getRoomInventoryStatus(r) === 'LOW').length > 0 
+                    ? 'text-rose-450 animate-pulse' 
+                    : 'text-emerald-400 font-semibold'
+                }`}>
+                  {Object.keys(roomInventories).filter(r => getRoomInventoryStatus(r) === 'LOW').length} Rooms
+                </span>
+              </div>
+              <div className={`p-3 rounded-xl border ${
+                Object.keys(roomInventories).filter(r => getRoomInventoryStatus(r) === 'LOW').length > 0 
+                  ? 'bg-rose-500/15 border-rose-500/20 text-rose-400 animate-bounce' 
+                  : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400'
+              }`}>
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+            </div>
+
+            <div className="bg-slate-900/40 p-4 border border-indigo-500/10 rounded-2xl flex flex-col justify-center space-y-2 relative overflow-hidden group">
+              <span className="text-[10px] text-indigo-300 font-extrabold uppercase tracking-wide block">Automated Dispatch Room Service</span>
+              <button
+                type="button"
+                onClick={() => {
+                  // Replenish all room inventories
+                  const updated = { ...roomInventories };
+                  let count = 0;
+                  rooms.forEach(r => {
+                    const rNo = r.room_no;
+                    const items = updated[rNo] || [];
+                    const hasLow = items.some(i => i.quantity < i.minRequired) || items.length === 0;
+                    if (hasLow) {
+                      updated[rNo] = [
+                        { name: 'Towels', quantity: 4, minRequired: 2 },
+                        { name: 'Soaps', quantity: 3, minRequired: 2 },
+                        { name: 'Remote Controls', quantity: 1, minRequired: 1 },
+                        { name: 'Bed Sheets', quantity: 2, minRequired: 2 },
+                        { name: 'Toilet Paper', quantity: 5, minRequired: 3 }
+                      ];
+                      count++;
+                    }
+                  });
+                  setRoomInventories(updated);
+                  localStorage.setItem('guest_house_room_inventory', JSON.stringify(updated));
+                  if (count > 0) {
+                    triggerToast(`✓ Instantly replenished stocks in all ${count} low stock rooms!`);
+                  } else {
+                    triggerToast('✓ Inventory is solid. No low stock rooms detected.');
+                  }
+                }}
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs py-2 px-3.5 rounded-lg transition flex items-center justify-center gap-2 cursor-pointer shadow-md select-none"
+              >
+                <RefreshCw className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: '4s' }} />
+                <span>Restock All Low Rooms</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Filters & Control Row */}
+          <div className="bg-slate-800/40 p-4 border border-slate-700/60 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
+            <div className="flex items-center space-x-3 w-full sm:max-w-xs">
+              <div className="relative w-full">
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400" />
+                <input 
+                  type="text" 
+                  placeholder="Identify room inventory... (e.g. 102)"
+                  value={invSearch}
+                  onChange={(e) => setInvSearch(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-2 text-xs outline-none focus:border-indigo-500 transition text-white"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setInvFilterLow(!invFilterLow)}
+                className={`py-1.5 px-4 rounded-xl text-xs font-bold transition flex items-center gap-2 border cursor-pointer select-none ${
+                  invFilterLow 
+                    ? 'bg-rose-500/10 text-rose-400 border-rose-500/30 font-extrabold' 
+                    : 'bg-slate-900/60 hover:bg-slate-900 border-slate-700 text-slate-300'
+                }`}
+              >
+                <AlertTriangle className={`w-3.5 h-3.5 ${invFilterLow ? 'text-rose-400 animate-pulse' : 'text-slate-500'}`} />
+                <span>Show Low Stocks Alert Only</span>
+                {invFilterLow && (
+                  <span className="ml-1 bg-rose-500 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center">
+                    {rooms.filter(r => getRoomInventoryStatus(r.room_no) === 'LOW').length}
+                  </span>
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  // Simulate client usage / guest using amenities
+                  setRoomInventories(prev => {
+                    const updated = { ...prev };
+                    rooms.forEach(r => {
+                      if (Math.random() > 0.4 && updated[r.room_no]) {
+                        updated[r.room_no] = updated[r.room_no].map(item => {
+                          if (item.name === 'Towels' || item.name === 'Soaps' || item.name === 'Toilet Paper') {
+                            const newQty = Math.max(0, item.quantity - Math.floor(Math.random() * 2));
+                            return { ...item, quantity: newQty };
+                          }
+                          return item;
+                        });
+                      }
+                    });
+                    localStorage.setItem('guest_house_room_inventory', JSON.stringify(updated));
+                    triggerToast('🔔 Simulated guest utility consumption: stocks depleted across multiple rooms.');
+                    return updated;
+                  });
+                }}
+                className="py-1.5 px-3.5 bg-slate-900/60 hover:bg-slate-900 border border-slate-700 hover:border-slate-600 rounded-xl text-xs font-bold text-slate-300 transition cursor-pointer flex items-center gap-1.5"
+                title="Deplete item stocks randomly to simulate stay"
+              >
+                <span>Simulate Log Usage</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {rooms
+              .filter(room => {
+                const matchesSearch = room.room_no.includes(invSearch);
+                const isLow = getRoomInventoryStatus(room.room_no) === 'LOW';
+                const matchesLowOnly = invFilterLow ? isLow : true;
+                return matchesSearch && matchesLowOnly;
+              })
+              .map(room => {
+                const items = roomInventories[room.room_no] || [
+                  { name: 'Towels', quantity: 4, minRequired: 2 },
+                  { name: 'Soaps', quantity: 3, minRequired: 2 },
+                  { name: 'Remote Controls', quantity: 1, minRequired: 1 },
+                  { name: 'Bed Sheets', quantity: 2, minRequired: 2 },
+                  { name: 'Toilet Paper', quantity: 5, minRequired: 3 }
+                ];
+                const status = getRoomInventoryStatus(room.room_no);
+                
+                return (
+                  <div 
+                    key={room.id}
+                    className={`border rounded-2xl p-5 bg-slate-800/15 transition relative flex flex-col justify-between ${
+                      status === 'LOW' 
+                        ? 'border-rose-500/40 bg-rose-500/[0.01] shadow-[0_0_15px_rgba(244,63,94,0.06)]' 
+                        : 'border-slate-700/70 hover:border-slate-700'
+                    }`}
+                  >
+                    {/* Header bar of room inventory card */}
+                    <div className="flex justify-between items-start border-b border-slate-800 pb-3 mb-4">
+                      <div>
+                        <span className="text-[10px] text-slate-400 font-mono tracking-wider block uppercase">{room.floor} Floor Suite</span>
+                        <h4 className="text-base font-extrabold text-white">Room R-{room.room_no}</h4>
+                        <span className="text-[9px] text-indigo-400 font-medium">{room.type} ({room.status})</span>
+                      </div>
+                      
+                      <div className="flex items-center gap-2">
+                        {status === 'LOW' ? (
+                          <span className="bg-rose-500/10 text-rose-400 text-[9px] font-black py-1 px-2.5 rounded-full border border-rose-500/20 uppercase tracking-wider flex items-center gap-1 animate-pulse">
+                            <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
+                            <span>Low Stock Alert</span>
+                          </span>
+                        ) : (
+                          <span className="bg-emerald-500/10 text-emerald-400 text-[9px] font-bold py-1 px-2.5 rounded-full border border-emerald-500/20 uppercase tracking-normal flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                            <span>Stocks Secure</span>
+                          </span>
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setRoomInventories(prev => {
+                              const updated = { ...prev };
+                              updated[room.room_no] = [
+                                { name: 'Towels', quantity: 4, minRequired: 2 },
+                                { name: 'Soaps', quantity: 3, minRequired: 2 },
+                                { name: 'Remote Controls', quantity: 1, minRequired: 1 },
+                                { name: 'Bed Sheets', quantity: 2, minRequired: 2 },
+                                { name: 'Toilet Paper', quantity: 5, minRequired: 3 }
+                              ];
+                              localStorage.setItem('guest_house_room_inventory', JSON.stringify(updated));
+                              return updated;
+                            });
+                            triggerToast(`✓ Room ${room.room_no} stocks replenished to standard capacity.`);
+                          }}
+                          className="text-[9px] font-bold px-2 py-1 bg-slate-900 border border-slate-700 hover:border-slate-500 text-indigo-300 hover:text-white rounded-lg transition cursor-pointer"
+                        >
+                          Replenish Card
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Detailed list of items with micro-inputs */}
+                    <div className="space-y-4">
+                      {items.map(item => {
+                        const isLow = item.quantity < item.minRequired;
+                        const maxCapacity = item.name === 'Towels' ? 4 : item.name === 'Soaps' ? 3 : item.name === 'Remote Controls' ? 1 : item.name === 'Bed Sheets' ? 2 : 5;
+                        const pct = Math.min(100, Math.round((item.quantity / maxCapacity) * 100));
+
+                        return (
+                          <div key={item.name} className="flex items-center justify-between gap-4">
+                            
+                            {/* Left side: name and gauge */}
+                            <div className="flex-1 space-y-1">
+                              <div className="flex items-center justify-between text-xs font-semibold">
+                                <span className={isLow ? 'text-rose-400' : 'text-slate-300'}>
+                                  {item.name}
+                                </span>
+                                <div className="flex items-center gap-1">
+                                  <span className={`text-[11px] font-bold ${
+                                    isLow ? 'text-rose-450 font-black' : 'text-slate-100'
+                                  }`}>
+                                    {item.quantity} / {maxCapacity}
+                                  </span>
+                                  <span className="text-[9px] text-slate-500 font-normal">
+                                    (Req: {item.minRequired})
+                                  </span>
+                                  {isLow && (
+                                    <span className="text-[10px] text-rose-500" title="Under minimum required quantity!">
+                                      ⚠️
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Progress gauge bar */}
+                              <div className="h-1.5 bg-slate-950 rounded-full overflow-hidden w-full relative">
+                                <div 
+                                  className={`h-full transition-all duration-300 ${
+                                    isLow 
+                                      ? 'bg-gradient-to-r from-rose-500 to-pink-500' 
+                                      : 'bg-gradient-to-r from-indigo-500 to-emerald-500'
+                                  }`}
+                                  style={{ width: `${pct}%` }}
+                                />
+                              </div>
+                            </div>
+
+                            {/* Right side: controls */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => updateRoomInventory(room.room_no, item.name, item.quantity - 1)}
+                                className="w-6 h-6 bg-slate-900 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white rounded flex items-center justify-center font-bold text-xs select-none cursor-pointer transition"
+                              >
+                                -
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => updateRoomInventory(room.room_no, item.name, item.quantity + 1)}
+                                className="w-6 h-6 bg-slate-900 border border-slate-700 hover:border-slate-500 text-slate-300 hover:text-white rounded flex items-center justify-center font-bold text-xs select-none cursor-pointer transition"
+                              >
+                                +
+                              </button>
+                            </div>
+
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Quick status bottom guide */}
+                    <div className="mt-4 pt-3 border-t border-slate-900 text-[10px] text-slate-500 italic">
+                      Standard loadout: 4 Towels, 3 Soaps, 1 Remote, 2 Sheet sets, 5 Toilet paper rolls.
+                    </div>
+
+                  </div>
+                );
+              })}
+
+            {rooms.filter(room => {
+              const matchesSearch = room.room_no.includes(invSearch);
+              const isLow = getRoomInventoryStatus(room.room_no) === 'LOW';
+              const matchesLowOnly = invFilterLow ? isLow : true;
+              return matchesSearch && matchesLowOnly;
+            }).length === 0 && (
+              <div className="col-span-full py-20 text-center bg-slate-800/10 border border-slate-700/65 rounded-2xl space-y-1.5">
+                <AlertTriangle className="w-8 h-8 text-slate-500 mx-auto" />
+                <p className="text-xs text-slate-400">No rooms match your specific inventory filter parameters.</p>
+                <button
+                  type="button"
+                  onClick={() => { setInvSearch(''); setInvFilterLow(false); }}
+                  className="text-[10px] text-indigo-400 font-bold hover:underline"
+                >
+                  Clear search filters
+                </button>
+              </div>
+            )}
+          </div>
+
         </div>
       )}
 
