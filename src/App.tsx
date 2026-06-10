@@ -432,6 +432,7 @@ export default function App() {
               setReservations={setReservations} 
               rooms={rooms} 
               setRooms={setRooms}
+              guests={guests}
               lang={lang} 
               t={t} 
               triggerToast={triggerToast} 

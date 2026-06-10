@@ -1,18 +1,41 @@
 import React, { useState } from 'react';
-import { Reservation, Room } from '../types';
-import { Calendar, Plus, Search, HelpCircle, CheckCircle, XCircle, Trash2, Tag, QrCode, Printer, Copy, Check, X, FileText, Lock } from 'lucide-react';
+import { Reservation, Room, Guest } from '../types';
+import { 
+  Calendar, 
+  Plus, 
+  Search, 
+  HelpCircle, 
+  CheckCircle, 
+  XCircle, 
+  Trash2, 
+  Tag, 
+  QrCode, 
+  Printer, 
+  Copy, 
+  Check, 
+  X, 
+  FileText, 
+  Lock, 
+  MessageSquare, 
+  Send, 
+  Smartphone, 
+  CheckCheck, 
+  Settings, 
+  Sliders 
+} from 'lucide-react';
 
 interface ReservationsProps {
   reservations: Reservation[];
   setReservations: React.Dispatch<React.SetStateAction<Reservation[]>>;
   rooms: Room[];
   setRooms: React.Dispatch<React.SetStateAction<Room[]>>;
+  guests: Guest[];
   lang: string;
   t: (key: string) => string;
   triggerToast: (msg: string) => void;
 }
 
-export default function Reservations({ reservations, setReservations, rooms, setRooms, lang, t, triggerToast }: ReservationsProps) {
+export default function Reservations({ reservations, setReservations, rooms, setRooms, guests, lang, t, triggerToast }: ReservationsProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [showAddModal, setShowAddModal] = useState(false);
@@ -22,6 +45,109 @@ export default function Reservations({ reservations, setReservations, rooms, set
   const [copiedLink, setCopiedLink] = useState(false);
   const [registrationSigned, setRegistrationSigned] = useState(false);
   const [signatureName, setSignatureName] = useState('');
+
+  // Automated SMS check-in state
+  const [autoSmsEnabled, setAutoSmsEnabled] = useState(true);
+  const [smsTemplate, setSmsTemplate] = useState(
+    lang === 'en' 
+      ? "Welcome to Sorya Guesthouse, {GuestName}! Your room Suite R-{RoomNo} has been successfully checked in ({CheckInDate} to {CheckOutDate}). For assist, reply anytime. Keep this check-in token: S-{RoomNo}. Enjoy stay!"
+      : "សូមស្វាគមន៍មកកាន់ Sorya Guesthouse, {GuestName}! ការចុះឈ្មោះចូលបន្ទប់ Suite R-{RoomNo} ទទួលបានជោគជ័យ ពី {CheckInDate} ដល់ {CheckOutDate} ។ សូមរីករាយសម្រាប់ការស្នាក់នៅ!"
+  );
+  
+  const [smsLogs, setSmsLogs] = useState<Array<{
+    id: number;
+    guestName: string;
+    phone: string;
+    roomNo: string;
+    message: string;
+    timestamp: string;
+    status: 'Sent' | 'Delivered' | 'Failed';
+  }>>([
+    {
+      id: 1,
+      guestName: "Sok Mean",
+      phone: "+855 12 999 888",
+      roomNo: "101",
+      message: lang === 'en' 
+        ? "Welcome to Sorya Guesthouse, Sok Mean! Your room Suite R-101 has been successfully checked in. Enjoy your stay!" 
+        : "សូមស្វាគមន៍មកSorya Guesthouse, Sok Mean! ការចុះឈ្មោះចូលបន្ទប់ Suite R-101 ទទួលបានជោគជ័យ។",
+      timestamp: "09:12 AM",
+      status: "Delivered"
+    },
+    {
+      id: 2,
+      guestName: "Chhun Ly",
+      phone: "+855 99 111 222",
+      roomNo: "204",
+      message: lang === 'en' 
+        ? "Welcome to Sorya Guesthouse, Chhun Ly! Your room Suite R-204 has been successfully checked in. Enjoy your stay!" 
+        : "សូមស្វាគមន៍មកSorya Guesthouse, Chhun Ly! ការចុះឈ្មោះចូលបន្ទប់ Suite R-204 ទទួលបានជោគជ័យ។",
+      timestamp: "Yesterday",
+      status: "Delivered"
+    }
+  ]);
+
+  // Modal to customize message before manually sending/testing SMS
+  const [showManualSmsModal, setShowManualSmsModal] = useState<Reservation | null>(null);
+  const [manualPhone, setManualPhone] = useState('');
+  const [manualMessage, setManualMessage] = useState('');
+
+  // Live Phone Preview Overlay
+  const [selectedMobileLog, setSelectedMobileLog] = useState<{
+    guestName: string;
+    phone: string;
+    message: string;
+    timestamp: string;
+  } | null>(null);
+
+  const triggerCheckInSms = (b: Reservation) => {
+    // Find matching phone from our guest list
+    const matchedGuest = guests.find(g => g.name.toLowerCase() === b.guest_name.toLowerCase());
+    const phoneNo = matchedGuest ? matchedGuest.phone : "+855 " + Math.floor(Math.random() * 80 + 10) + " " + Math.floor(Math.random() * 900 + 100) + " " + Math.floor(Math.random() * 900 + 100);
+
+    // Build the template
+    let finalMsg = smsTemplate
+      .replace(/{GuestName}/g, b.guest_name)
+      .replace(/{RoomNo}/g, b.room_no)
+      .replace(/{CheckInDate}/g, b.checkin)
+      .replace(/{CheckOutDate}/g, b.checkout);
+
+    const newLog = {
+      id: Date.now(),
+      guestName: b.guest_name,
+      phone: phoneNo,
+      roomNo: b.room_no,
+      message: finalMsg,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      status: 'Delivered' as const
+    };
+
+    setSmsLogs(prev => [newLog, ...prev]);
+    triggerToast(lang === 'en' 
+      ? `📱 Automated SMS notification sent to ${b.guest_name} (${phoneNo})!` 
+      : `📱 បានផ្ញើសារ SMS ស្វ័យប្រវត្តទៅកាន់ ${b.guest_name} (${phoneNo})!`);
+  };
+
+  const handleManualSmsSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showManualSmsModal || !manualPhone.trim() || !manualMessage.trim()) return;
+
+    const newLog = {
+      id: Date.now(),
+      guestName: showManualSmsModal.guest_name,
+      phone: manualPhone.trim(),
+      roomNo: showManualSmsModal.room_no,
+      message: manualMessage.trim(),
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      status: 'Delivered' as const
+    };
+
+    setSmsLogs(prev => [newLog, ...prev]);
+    triggerToast(lang === 'en' 
+      ? `✓ Custom SMS successfully dispatched to ${manualPhone}!` 
+      : `✓ ការផ្ញើសារ SMS ផ្ទាល់ខ្លួនទៅកាន់ ${manualPhone} បានជោគជ័យ!`);
+    setShowManualSmsModal(null);
+  };
 
   // Form states for bookings
   const [guestName, setGuestName] = useState('');
@@ -79,7 +205,11 @@ export default function Reservations({ reservations, setReservations, rooms, set
     setReservations(reservations.map(r => {
       if (r.id === id) {
         triggerToast(`Booking status for ${r.guest_name} changed to Confirmed.`);
-        return { ...r, status: 'Confirmed' };
+        const updatedRes = { ...r, status: 'Confirmed' as const };
+        if (autoSmsEnabled) {
+          triggerCheckInSms(updatedRes);
+        }
+        return updatedRes;
       }
       return r;
     }));
@@ -239,6 +369,26 @@ export default function Reservations({ reservations, setReservations, rooms, set
                         <QrCode className="w-3.5 h-3.5" />
                       </button>
 
+                      <button
+                        onClick={() => {
+                          const matchedGuest = guests.find(g => g.name.toLowerCase() === booking.guest_name.toLowerCase());
+                          setManualPhone(matchedGuest ? matchedGuest.phone : "+855 ");
+                          
+                          let finalMsg = smsTemplate
+                            .replace(/{GuestName}/g, booking.guest_name)
+                            .replace(/{RoomNo}/g, booking.room_no)
+                            .replace(/{CheckInDate}/g, booking.checkin)
+                            .replace(/{CheckOutDate}/g, booking.checkout);
+                          
+                          setManualMessage(finalMsg);
+                          setShowManualSmsModal(booking);
+                        }}
+                        title={lang === 'en' ? "Simulate Custom SMS Alert" : "ផ្ញើសារ SMS ផ្ទាល់ខ្លួន"}
+                        className="p-1 px-2 border border-emerald-500/30 bg-emerald-500/10 hover:bg-emerald-600 text-emerald-400 hover:text-white rounded transition flex items-center justify-center cursor-pointer"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                      </button>
+
                       {booking.status === 'Pending' && (
                         <button
                           onClick={() => approveBooking(booking.id)}
@@ -282,6 +432,287 @@ export default function Reservations({ reservations, setReservations, rooms, set
           </table>
         </div>
       </div>
+
+      {/* Automated SMS Notification Utilities Desk */}
+      <div className="bg-slate-800/20 border border-slate-700/60 rounded-2xl p-6 shadow-md space-y-6 no-print">
+        <div className="flex flex-col md:flex-row md:items-center justify-between border-b border-slate-700/60 pb-4 gap-2">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 rounded-xl">
+              <MessageSquare className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-bold text-white text-base">Guest Contact SMS Notification Desk</h3>
+              <p className="text-[11px] text-slate-400">Manage automated SMS triggers dispatched to patrons upon check-in completion.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 bg-slate-900/60 px-4 py-2 border border-slate-700 rounded-xl">
+            <span className="text-xs font-semibold text-slate-300">Automated Dispatch:</span>
+            <button
+              onClick={() => {
+                setAutoSmsEnabled(!autoSmsEnabled);
+                triggerToast(lang === 'en' 
+                  ? `Automated Check-In SMS ${!autoSmsEnabled ? 'Enabled' : 'Disabled'}` 
+                  : `បាន${!autoSmsEnabled ? 'បើក' : 'បិទ'}ការផ្ញើសារស្វ័យប្រវត្ត`);
+              }}
+              className={`relative inline-flex h-5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                autoSmsEnabled ? 'bg-emerald-600' : 'bg-slate-700'
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                  autoSmsEnabled ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+            <span className={`text-[10px] font-bold ${autoSmsEnabled ? 'text-emerald-400' : 'text-slate-500'}`}>
+              {autoSmsEnabled ? 'ACTIVE' : 'MUTED'}
+            </span>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Settings & Template Customization */}
+          <div className="lg:col-span-6 space-y-4">
+            <div className="bg-slate-900/30 p-4 border border-slate-700/40 rounded-xl space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider block">Check-in SMS Template Specification</span>
+                <span className="text-[9px] bg-indigo-500/10 text-indigo-300 font-bold px-2 py-0.5 rounded border border-indigo-500/25">SYSTEM ACTIVE</span>
+              </div>
+              
+              <textarea
+                value={smsTemplate}
+                onChange={(e) => setSmsTemplate(e.target.value)}
+                placeholder="SMS message template..."
+                className="w-full h-24 bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-white outline-none focus:border-indigo-500 font-sans resize-none leading-relaxed"
+              />
+
+              <div className="space-y-2">
+                <span className="text-[10px] font-bold text-slate-400 block uppercase tracking-wide">Valid Template Parameters:</span>
+                <div className="flex flex-wrap gap-1.5 text-[9px] font-mono select-none">
+                  {[
+                    { token: '{GuestName}', label: 'Guest Name' },
+                    { token: '{RoomNo}', label: 'Room #' },
+                    { token: '{CheckInDate}', label: 'Check-in date' },
+                    { token: '{CheckOutDate}', label: 'Check-out date' }
+                  ].map(item => (
+                    <button
+                      key={item.token}
+                      onClick={() => {
+                        setSmsTemplate(prev => prev + ' ' + item.token);
+                        triggerToast(`Appended placeholder ${item.token}`);
+                      }}
+                      className="px-2 py-1 bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 rounded transition flex items-center gap-1 cursor-pointer"
+                      title={`Click to append ${item.token}`}
+                    >
+                      <span>{item.token}</span>
+                      <span className="text-slate-500 font-sans font-normal">({item.label})</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-3 bg-indigo-500/5 border border-indigo-500/10 rounded-xl space-y-1">
+              <div className="flex items-center gap-2 text-indigo-300">
+                <HelpCircle className="w-4 h-4 text-indigo-405 shrink-0" />
+                <span className="text-xs font-bold">{lang === 'en' ? 'How automated SMS triggers work?' : 'តើការផ្ញើសារ SMS ស្វ័យប្រវត្តដំណើរការដូចម្តេច?'}</span>
+              </div>
+              <p className="text-[11px] text-slate-400 leading-normal">
+                When you click <strong className="text-emerald-400 font-semibold">"Approve"</strong> on a reservation, the system completes the check-in confirmation flow. It pulls the guest's contact credentials from the profile registry, compiles the message template, and fires an instant webhook simulating SMS carriage.
+              </p>
+            </div>
+          </div>
+
+          {/* SMS Sent Logs / Outbox */}
+          <div className="lg:col-span-6 space-y-3">
+            <span className="text-xs font-bold text-indigo-300 uppercase tracking-wider block">Live Delivery Log (Outbox Stream)</span>
+            
+            <div className="bg-slate-900/40 border border-slate-700/60 rounded-xl divide-y divide-slate-800 max-h-[290px] overflow-y-auto">
+              {smsLogs.length === 0 ? (
+                <div className="py-12 text-center text-slate-500 text-xs font-mono">
+                  No notifications recorded. Approve check-ins to dispatch.
+                </div>
+              ) : (
+                smsLogs.map(log => (
+                  <div 
+                    key={log.id} 
+                    className="p-3 hover:bg-slate-850/30 transition flex justify-between items-start gap-4 cursor-pointer"
+                    onClick={() => {
+                      setSelectedMobileLog({
+                        guestName: log.guestName,
+                        phone: log.phone,
+                        roomNo: log.roomNo,
+                        message: log.message,
+                        timestamp: log.timestamp
+                      });
+                    }}
+                    title="Click to view on Mobile Simulator"
+                  >
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white text-xs">{log.guestName}</span>
+                        <span className="text-[10px] text-slate-400 font-mono">Room R-{log.roomNo}</span>
+                      </div>
+                      <p className="text-[10px] text-slate-300 truncate leading-snug">{log.message}</p>
+                      <div className="flex items-center gap-2 text-[9px] text-slate-500 font-mono">
+                        <span>{log.phone}</span>
+                        <span>•</span>
+                        <span>{log.timestamp}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span className="bg-emerald-500/10 text-emerald-400 text-[8px] font-bold px-2 py-0.5 rounded-full border border-emerald-500/20 uppercase tracking-widest flex items-center gap-0.5">
+                        <CheckCheck className="w-2.5 h-2.5" />
+                        <span>Delivered</span>
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Manual SMS Send / Edit Modal */}
+      {showManualSmsModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center bg-transparent backdrop-blur-md px-4 no-print">
+          <div className="bg-slate-800 border border-slate-700/80 rounded-2xl max-w-md w-full p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex justify-between items-center mb-4 pb-3 border-b border-slate-700/60">
+              <div className="flex items-center gap-2">
+                <Smartphone className="w-5 h-5 text-emerald-400" />
+                <h3 className="font-bold text-white text-sm uppercase tracking-wider">Simulate Manual SMS Dispatch</h3>
+              </div>
+              <button 
+                onClick={() => setShowManualSmsModal(null)}
+                className="p-1 hover:bg-slate-700 text-slate-400 hover:text-white rounded-lg transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <form onSubmit={handleManualSmsSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Recipient Name</label>
+                <div className="bg-slate-900 border border-slate-755 p-2.5 rounded-lg text-xs font-semibold text-slate-200">
+                  {showManualSmsModal.guest_name} (Room Suite R-{showManualSmsModal.room_no})
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Guest Mobile Phone *</label>
+                <input
+                  type="text"
+                  value={manualPhone}
+                  onChange={(e) => setManualPhone(e.target.value)}
+                  placeholder="+855 12 345 678"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 font-mono"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Carriage Text Message *</label>
+                <textarea
+                  value={manualMessage}
+                  onChange={(e) => setManualMessage(e.target.value)}
+                  rows={4}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 font-normal leading-relaxed resize-none"
+                  required
+                />
+              </div>
+
+              <div className="pt-4 border-t border-slate-700 flex justify-end gap-2.5">
+                <button 
+                  type="button" 
+                  onClick={() => setShowManualSmsModal(null)}
+                  className="px-3.5 py-2 bg-slate-700 hover:bg-slate-650 rounded-lg text-xs font-semibold text-slate-300"
+                >
+                  {t('cancel')}
+                </button>
+                <button 
+                  type="submit" 
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 rounded-lg text-xs font-semibold text-white flex items-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  <span>Send SMS Now</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Interactive Mobile SMS Simulator Mockup Modal */}
+      {selectedMobileLog && (
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center bg-transparent backdrop-blur-md px-4 no-print" onClick={() => setSelectedMobileLog(null)}>
+          <div className="relative max-w-sm w-full mx-auto animate-in fade-in zoom-in-95 duration-150" onClick={(e) => e.stopPropagation()}>
+            <div className="w-[310px] h-[600px] bg-slate-950 rounded-[40px] px-4 py-6 border-[8px] border-slate-800 shadow-[0_20px_50px_rgba(0,0,0,0.8)] relative flex flex-col justify-between">
+              
+              {/* Speaker & Sensor bar at top bar */}
+              <div className="absolute top-2.5 left-1/2 transform -translate-x-1/2 w-28 h-4 bg-slate-950 rounded-full flex justify-center items-center gap-1.5 z-20">
+                <div className="w-8 h-1 bg-slate-800 rounded-full"></div>
+                <div className="w-1.5 h-1.5 bg-slate-800 rounded-full"></div>
+              </div>
+
+              {/* Header inside phone */}
+              <div className="bg-slate-900 border-b border-slate-800 py-3 pt-4 text-center rounded-t-2xl">
+                <div className="flex items-center justify-between px-2 text-[9px] text-slate-400 font-mono">
+                  <span>9:41 AM</span>
+                  <div className="flex items-center gap-1">
+                    <span>📶</span>
+                    <span>🔋</span>
+                  </div>
+                </div>
+                <div className="mt-1">
+                  <div className="w-7 h-7 bg-indigo-500 text-white font-bold rounded-full flex items-center justify-center text-xs mx-auto mb-1">
+                    {selectedMobileLog.guestName.charAt(0)}
+                  </div>
+                  <h4 className="font-bold text-white text-[11px] leading-none mb-0.5">{selectedMobileLog.guestName}</h4>
+                  <span className="text-[8px] text-emerald-400 font-mono flex items-center justify-center gap-0.5">
+                    {selectedMobileLog.phone}
+                  </span>
+                </div>
+              </div>
+
+              {/* Message scroll container inside phone */}
+              <div className="flex-1 bg-slate-900 p-3 space-y-4 overflow-y-auto flex flex-col justify-end">
+                <div className="text-center">
+                  <span className="text-[8px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider font-mono">
+                    Today {selectedMobileLog.timestamp}
+                  </span>
+                </div>
+                
+                {/* Guest welcome SMS body bubble */}
+                <div className="bg-indigo-600 text-white text-[11px] p-3 rounded-2xl rounded-tr-none max-w-[85%] self-end shadow-sm relative">
+                  <p className="leading-relaxed whitespace-pre-wrap">{selectedMobileLog.message}</p>
+                  <span className="text-[7px] text-indigo-200 uppercase tracking-widest block text-right mt-1.5 font-bold">
+                    Delivered ✔✔
+                  </span>
+                </div>
+              </div>
+
+              {/* Bottom carriage compose bar inside phone */}
+              <div className="bg-slate-900 border-t border-slate-800 py-2.5 px-2 flex items-center justify-between gap-1.5 rounded-b-2xl">
+                <div className="flex-1 bg-slate-950 border border-slate-805 rounded-full px-3 py-1 flex items-center">
+                  <span className="text-[10px] text-slate-600 select-none">iMessage</span>
+                </div>
+                <div className="w-6 h-6 bg-indigo-600 text-white rounded-full flex items-center justify-center text-[10px] cursor-pointer">
+                  ⬆️
+                </div>
+              </div>
+              
+              {/* Home swipe indicator line */}
+              <div className="absolute bottom-1 right-24 left-24 h-1 bg-slate-700 rounded-full"></div>
+            </div>
+
+            {/* Back click dismiss overlay instructions */}
+            <div className="absolute top-2 right-[-100px] bg-slate-900 border border-slate-700 rounded-xl px-3 py-1.5 text-[10px] text-slate-300 font-medium shadow-md pointer-events-none">
+              Click outside to close
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Booking registration modal dialog */}
       {showAddModal && (

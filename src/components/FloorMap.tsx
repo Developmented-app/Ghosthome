@@ -18,7 +18,12 @@ import {
   Eye,
   DollarSign,
   PlusCircle,
-  HelpCircle
+  HelpCircle,
+  Power,
+  Thermometer,
+  Zap,
+  Sun,
+  Wind
 } from 'lucide-react';
 
 interface FloorMapProps {
@@ -326,6 +331,30 @@ export default function FloorMap({
 
     setIsEditingStatus(false);
     triggerToast(`✓ Room ${selectedRoom.room_no} override: set to ${newRoomStatus}.`);
+  };
+
+  const toggleSmartField = (roomId: number, field: 'energy_saver' | 'auto_ac' | 'smart_lights') => {
+    setRooms(prev => prev.map(r => {
+      if (r.id === roomId) {
+        const currentVal = !r[field];
+        const fieldName = field === 'energy_saver' ? 'Energy Saver' : field === 'auto_ac' ? 'Auto-AC' : 'Smart Lights';
+        triggerToast(`🔌 Room #${r.room_no}: ${fieldName} set to ${currentVal ? 'Active (ON)' : 'Inactive (OFF)'}`);
+        return { ...r, [field]: currentVal };
+      }
+      return r;
+    }));
+  };
+
+  const adjustAcTemp = (roomId: number, targetTemp: number) => {
+    setRooms(prev => prev.map(r => {
+      if (r.id === roomId) {
+        const currentTmp = r.ac_temp || 24;
+        const finalTemp = Math.max(16, Math.min(30, targetTemp));
+        triggerToast(`🌡️ Room #${r.room_no}: Target AC temperature set to ${finalTemp}°C`);
+        return { ...r, ac_temp: finalTemp };
+      }
+      return r;
+    }));
   };
 
   return (
@@ -698,6 +727,155 @@ export default function FloorMap({
                     {currentT.noUpcomingReservations}
                   </div>
                 )}
+              </div>
+
+              {/* SMART ROOM COMFORT CONTROL INTERFACE */}
+              <div className="space-y-3.5 border-t border-slate-800/85 pt-4">
+                <span className="text-[10px] text-indigo-300 uppercase font-mono font-bold tracking-wide block flex items-center gap-1.5">
+                  <Zap className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+                  <span>{lang === 'en' ? 'Smart Room Controls' : 'បញ្ជាឧបករណ៍វៃឆ្លាត'}</span>
+                </span>
+
+                <div className="bg-[#070b14] border border-slate-800/80 rounded-xl p-4 space-y-3.5">
+                  
+                  {/* Energy Saver Toggle */}
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <Power className={`w-3.5 h-3.5 ${selectedRoom.energy_saver ? 'text-emerald-400' : 'text-slate-500'}`} />
+                        <span className="text-xs font-bold text-slate-200">
+                          {lang === 'en' ? 'Energy Saver' : 'របៀបសន្សំសំចៃភ្លើង'}
+                        </span>
+                      </div>
+                      <p className="text-[9px] text-slate-400 leading-normal">
+                        {lang === 'en' ? 'Automatic power shutting on guest exit' : 'កាត់ផ្តាច់ចរន្តអគ្គិសនីស្វ័យប្រវត្តពេលចេញក្រៅ'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleSmartField(selectedRoom.id, 'energy_saver')}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        selectedRoom.energy_saver ? 'bg-emerald-600' : 'bg-slate-700'
+                      }`}
+                      style={{ backgroundColor: selectedRoom.energy_saver ? '#059669' : '#334155' }}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          selectedRoom.energy_saver ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Smart Lights Toggle */}
+                  <div className="flex items-center justify-between gap-2 border-t border-slate-900 pt-3">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-1.5">
+                        <Sun className={`w-3.5 h-3.5 ${selectedRoom.smart_lights ? 'text-amber-400 animate-pulse' : 'text-slate-500'}`} />
+                        <span className="text-xs font-bold text-slate-200">
+                          {lang === 'en' ? 'Smart Ambient Lights' : 'ភ្លើងបំភ្លឺបន្ទប់វៃឆ្លាត'}
+                        </span>
+                      </div>
+                      <p className="text-[9px] text-slate-400 leading-normal">
+                        {lang === 'en' ? 'Toggled cozy lighting presets remotely' : 'បញ្ជាបើកបិទភ្លើងបន្ទប់ពីចម្ងាយ'}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleSmartField(selectedRoom.id, 'smart_lights')}
+                      className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                        selectedRoom.smart_lights ? 'bg-amber-500' : 'bg-slate-700'
+                      }`}
+                      style={{ backgroundColor: selectedRoom.smart_lights ? '#d97706' : '#334155' }}
+                    >
+                      <span
+                        className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                          selectedRoom.smart_lights ? 'translate-x-4' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {/* Auto-AC Control Column */}
+                  <div className="space-y-3 border-t border-slate-900 pt-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="space-y-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <Wind className={`w-3.5 h-3.5 ${selectedRoom.auto_ac ? 'text-indigo-400' : 'text-slate-500'}`} />
+                          <span className="text-xs font-bold text-slate-200">
+                            {lang === 'en' ? 'Smart Auto-AC' : 'ម៉ាស៊ីនត្រជាក់ស្វ័យប្រវត្ត'}
+                          </span>
+                        </div>
+                        <p className="text-[9px] text-slate-400 leading-normal">
+                          {lang === 'en' ? 'Regulate efficiency via real-time climate telemetry' : 'រក្សាសីតុណ្ហភាពបន្ទប់ឲ្យសមស្របដោយស្វ័យប្រវត្ត'}
+                        </p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleSmartField(selectedRoom.id, 'auto_ac')}
+                        className={`relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                          selectedRoom.auto_ac ? 'bg-indigo-600' : 'bg-slate-700'
+                        }`}
+                        style={{ backgroundColor: selectedRoom.auto_ac ? '#4f46e5' : '#334155' }}
+                      >
+                        <span
+                          className={`pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                            selectedRoom.auto_ac ? 'translate-x-4' : 'translate-x-0'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* AC TEMPERATURE ADJUSTMENT SLIDER */}
+                    {selectedRoom.auto_ac && (
+                      <div className="bg-slate-950/85 p-2.5 rounded-lg border border-indigo-950/50 flex flex-col gap-2 animate-in slide-in-from-top-1 duration-150">
+                        <div className="flex justify-between items-center">
+                          <span className="text-[10px] text-indigo-300 font-bold uppercase tracking-wider font-mono flex items-center gap-1">
+                            <Thermometer className="w-3 h-3 text-indigo-455" />
+                            <span>Target Climate</span>
+                          </span>
+                          <span className="text-xs font-black text-white font-mono bg-indigo-500/20 text-indigo-400 border border-indigo-500/20 px-1.5 py-0.5 rounded">
+                            {selectedRoom.ac_temp || 24}°C
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => adjustAcTemp(selectedRoom.id, (selectedRoom.ac_temp || 24) - 1)}
+                            className="w-7 h-7 bg-slate-800 hover:bg-slate-700 text-white font-extrabold rounded-lg flex items-center justify-center text-xs transition cursor-pointer select-none"
+                            title="Decrease temperature"
+                          >
+                            -
+                          </button>
+                          
+                          {/* Temperature visual bar */}
+                          <div className="flex-1 h-2 bg-slate-900 rounded-full overflow-hidden relative flex items-center">
+                            <div 
+                              className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 transition-all duration-300"
+                              style={{ width: `${Math.max(0, Math.min(100, (((selectedRoom.ac_temp || 24) - 16) / 14) * 100))}%` }}
+                            />
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => adjustAcTemp(selectedRoom.id, (selectedRoom.ac_temp || 24) + 1)}
+                            className="w-7 h-7 bg-slate-800 hover:bg-slate-700 text-white font-extrabold rounded-lg flex items-center justify-center text-xs transition cursor-pointer select-none"
+                            title="Increase temperature"
+                          >
+                            +
+                          </button>
+                        </div>
+                        <div className="flex justify-between text-[8px] text-slate-500 font-mono">
+                          <span>MIN: 16°C</span>
+                          <span>ECO TARGET</span>
+                          <span>MAX: 30°C</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                </div>
               </div>
 
               {/* STATUS CHANGE SECTION OVERRIDE */}

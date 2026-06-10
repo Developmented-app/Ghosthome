@@ -7,6 +7,10 @@ export interface Room {
   daily_price: number;
   monthly_price: number;
   status: 'Available' | 'Occupied' | 'Reserved' | 'Maintenance';
+  energy_saver?: boolean;
+  auto_ac?: boolean;
+  ac_temp?: number;
+  smart_lights?: boolean;
 }
 
 export interface Guest {
