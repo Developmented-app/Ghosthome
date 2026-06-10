@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { translations } from './translations';
 import {
   initialRooms,
@@ -32,6 +32,7 @@ import StaffPayroll from './components/StaffPayroll';
 import CrmNotepad from './components/CrmNotepad';
 import Reports from './components/Reports';
 import DevHub from './components/DevHub';
+import GuestPortal from './components/GuestPortal';
 
 import {
   LayoutDashboard,
@@ -54,7 +55,8 @@ import {
   CheckCircle,
   HelpCircle,
   Menu,
-  X
+  X,
+  Sparkles
 } from 'lucide-react';
 
 export default function App() {
@@ -73,8 +75,10 @@ export default function App() {
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
   const [staff, setStaff] = useState<Staff[]>(initialStaff);
   const [crmNotes, setCrmNotes] = useState<CrmNote[]>(initialCrmNotes);
+  const [exchangeRate, setExchangeRate] = useState<number>(4100);
   const [searchQuery, setSearchQuery] = useState('');
   const [toastMsg, setToastMsg] = useState('');
+  const [notifiedCheckins, setNotifiedCheckins] = useState<number[]>([]);
 
   // Notifications
   const [showNotifications, setShowNotifications] = useState(false);
@@ -97,6 +101,45 @@ export default function App() {
     }, 4000);
   };
 
+  // Run automatically on load or change. Detect if checkin is today and alert the receptionist clerk.
+  useEffect(() => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    const startingToday = reservations.filter(
+      r => r.checkin === todayStr && 
+      r.status !== 'Cancelled' && 
+      !notifiedCheckins.includes(r.id)
+    );
+
+    if (startingToday.length > 0) {
+      startingToday.forEach((res, index) => {
+        // Trigger a premium reminder toast slightly staggered
+        setTimeout(() => {
+          triggerToast(lang === 'en'
+            ? `🔔 Reminder: ${res.guest_name}'s reservation for Room ${res.room_no} starts today!`
+            : `🔔 រំលឹក៖ ការកក់របស់ភ្ញៀវ ${res.guest_name} សម្រាប់បន្ទប់ ${res.room_no} ចាប់ផ្តើមនៅថ្ងៃនេះ!`);
+        }, index * 800);
+
+        // Append to local system notifications
+        setNotifications(prev => {
+          const textMsg = `Reminder: ${res.guest_name}'s reservation for Room ${res.room_no} starts today.`;
+          if (prev.some(n => n.text === textMsg)) return prev;
+          return [
+            {
+              id: prev.length > 0 ? Math.max(...prev.map(n => n.id)) + 1 : 1,
+              text: textMsg,
+              type: 'Important',
+              time: 'Just now'
+            },
+            ...prev
+          ];
+        });
+      });
+
+      // Avoid looping alerts on state triggers
+      setNotifiedCheckins(prev => [...prev, ...startingToday.map(r => r.id)]);
+    }
+  }, [reservations, notifiedCheckins, lang]);
+
   // Clear a notification
   const dismissNotification = (id: number) => {
     setNotifications(prev => prev.filter(n => n.id !== id));
@@ -105,6 +148,7 @@ export default function App() {
 
   const menuItems = [
     { id: 'dashboard', label: t('dashboard'), icon: LayoutDashboard },
+    { id: 'guestPortal', label: t('guestPortal'), icon: Sparkles },
     { id: 'rooms', label: t('roomManagement'), icon: Home },
     { id: 'guests', label: t('guestManagement'), icon: Users },
     { id: 'reservations', label: t('reservations'), icon: CalendarDays },
@@ -303,10 +347,26 @@ export default function App() {
             />
           )}
 
+          {activeTab === 'guestPortal' && (
+            <GuestPortal 
+              rooms={rooms}
+              setRooms={setRooms}
+              guests={guests}
+              setGuests={setGuests}
+              reservations={reservations}
+              setReservations={setReservations}
+              lang={lang}
+              t={t}
+              triggerToast={triggerToast}
+              exchangeRate={exchangeRate}
+            />
+          )}
+
           {activeTab === 'rooms' && (
             <RoomManagement 
               rooms={rooms} 
               setRooms={setRooms} 
+              notifications={notifications}
               lang={lang} 
               t={t} 
               triggerToast={triggerToast} 
@@ -356,6 +416,8 @@ export default function App() {
               lang={lang} 
               t={t} 
               triggerToast={triggerToast} 
+              exchangeRate={exchangeRate}
+              setExchangeRate={setExchangeRate}
             />
           )}
 
@@ -366,6 +428,8 @@ export default function App() {
               lang={lang} 
               t={t} 
               triggerToast={triggerToast} 
+              exchangeRate={exchangeRate}
+              setExchangeRate={setExchangeRate}
             />
           )}
 

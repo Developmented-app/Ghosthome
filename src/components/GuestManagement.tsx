@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Guest } from '../types';
-import { UserPlus, Search, Phone, Mail, FileText, Trash2, Heart, QrCode, Printer, Copy, Check, X } from 'lucide-react';
+import { UserPlus, Search, Phone, Mail, FileText, Trash2, Heart, QrCode, Printer, Copy, Check, X, Download, Table, LayoutGrid, Edit, Shield } from 'lucide-react';
 
 interface GuestManagementProps {
   guests: Guest[];
@@ -16,6 +16,11 @@ export default function GuestManagement({ guests, setGuests, lang, t, triggerToa
   const [selectedGuestForQr, setSelectedGuestForQr] = useState<Guest | null>(null);
   const [copiedPayload, setCopiedPayload] = useState(false);
 
+  // Bulk selection and layout states
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
+
   // Form States for Guest
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -23,6 +28,62 @@ export default function GuestManagement({ guests, setGuests, lang, t, triggerToa
   const [email, setEmail] = useState('');
   const [emergency, setEmergency] = useState('');
   const [history, setHistory] = useState('New Profile registered.');
+  const [tier, setTier] = useState<'Standard' | 'VIP' | 'Authorized'>('Standard');
+  const [discount, setDiscount] = useState<number>(0);
+
+  // Edit Guest States
+  const [selectedGuestForEdit, setSelectedGuestForEdit] = useState<Guest | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editIdPassport, setEditIdPassport] = useState('');
+  const [editEmail, setEditEmail] = useState('');
+  const [editEmergency, setEditEmergency] = useState('');
+  const [editHistory, setEditHistory] = useState('');
+  const [editTier, setEditTier] = useState<'Standard' | 'VIP' | 'Authorized'>('Standard');
+  const [editDiscount, setEditDiscount] = useState<number>(0);
+
+  const openEditModal = (guest: Guest) => {
+    setSelectedGuestForEdit(guest);
+    setEditName(guest.name);
+    setEditPhone(guest.phone);
+    setEditIdPassport(guest.id_passport);
+    setEditEmail(guest.email || '');
+    setEditEmergency(guest.emergency || '');
+    setEditHistory(guest.history || 'New Profile registered.');
+    setEditTier(guest.tier || 'Standard');
+    setEditDiscount(guest.discount || 0);
+  };
+
+  const handleEditSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editName.trim() || !editPhone.trim() || !editIdPassport.trim()) {
+      triggerToast(t('validationError'));
+      return;
+    }
+
+    setGuests(prev => prev.map(g => {
+      if (g.id === selectedGuestForEdit?.id) {
+        return {
+          ...g,
+          name: editName.trim(),
+          phone: editPhone.trim(),
+          id_passport: editIdPassport.trim(),
+          email: editEmail.trim(),
+          emergency: editEmergency.trim(),
+          history: editHistory.trim(),
+          tier: editTier,
+          discount: editDiscount,
+          is_authorized: editTier !== 'Standard'
+        };
+      }
+      return g;
+    }));
+
+    setSelectedGuestForEdit(null);
+    triggerToast(lang === 'en'
+      ? `Updated guest ${editName} profile & privileges successfully.`
+      : `បានធ្វើបច្ចុប្បន្នភាពគណនីភ្ញៀវ ${editName} និងសិទ្ធិពិសេសជោគជ័យ។`);
+  };
 
   const handleRegisterSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +99,10 @@ export default function GuestManagement({ guests, setGuests, lang, t, triggerToa
       id_passport: idPassport.trim(),
       email: email.trim(),
       emergency: emergency.trim(),
-      history: history.trim()
+      history: history.trim(),
+      tier: tier,
+      discount: discount,
+      is_authorized: tier !== 'Standard'
     };
 
     setGuests([...guests, created]);
@@ -52,10 +116,13 @@ export default function GuestManagement({ guests, setGuests, lang, t, triggerToa
     setEmail('');
     setEmergency('');
     setHistory('New Profile registered.');
+    setTier('Standard');
+    setDiscount(0);
   };
 
   const removeGuest = (id: number, gName: string) => {
     setGuests(guests.filter(g => g.id !== id));
+    setSelectedIds(prev => prev.filter(selectedId => selectedId !== id));
     triggerToast(`Removed profile for ${gName}.`);
   };
 
@@ -65,6 +132,55 @@ export default function GuestManagement({ guests, setGuests, lang, t, triggerToa
     g.id_passport.toLowerCase().includes(search.toLowerCase()) ||
     g.email.toLowerCase().includes(search.toLowerCase())
   );
+
+  const filteredIds = filtered.map(g => g.id);
+  const areAllFilteredSelected = filteredIds.length > 0 && filteredIds.every(id => selectedIds.includes(id));
+
+  const toggleSelectAll = () => {
+    if (areAllFilteredSelected) {
+      // Deselect all filtered guests
+      setSelectedIds(prev => prev.filter(id => !filteredIds.includes(id)));
+    } else {
+      // Select all filtered guests
+      setSelectedIds(prev => Array.from(new Set([...prev, ...filteredIds])));
+    }
+  };
+
+  const toggleSelectOne = (id: number) => {
+    setSelectedIds(prev =>
+      prev.includes(id) ? prev.filter(selectedId => selectedId !== id) : [...prev, id]
+    );
+  };
+
+  const exportSelectedGuests = () => {
+    const selectedGuests = guests.filter(g => selectedIds.includes(g.id));
+    if (selectedGuests.length === 0) return;
+
+    // Generate CSV content
+    const headers = ['ID', 'Name', 'Phone', 'Email', 'ID Passport', 'Emergency Contact', 'Remarks/History'];
+    const rows = selectedGuests.map(g => [
+      g.id,
+      `"${g.name.replace(/"/g, '""')}"`,
+      `"${g.phone.replace(/"/g, '""')}"`,
+      `"${(g.email || '').replace(/"/g, '""')}"`,
+      `"${g.id_passport.replace(/"/g, '""')}"`,
+      `"${(g.emergency || '').replace(/"/g, '""')}"`,
+      `"${(g.history || '').replace(/"/g, '""')}"`
+    ]);
+
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `guesthouse_selected_guests_${new Date().toISOString().slice(0, 10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    triggerToast(`Exported ${selectedGuests.length} guest records successfully!`);
+  };
 
   return (
     <div className="space-y-6">
@@ -83,9 +199,9 @@ export default function GuestManagement({ guests, setGuests, lang, t, triggerToa
         </button>
       </div>
 
-      {/* Search Filter */}
-      <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/60">
-        <div className="relative max-w-sm">
+      {/* Styled Search Filter & Modular View Toggle Controls */}
+      <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/60 flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-4">
+        <div className="relative max-w-sm w-full">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400" />
           <input 
             type="text" 
@@ -95,83 +211,379 @@ export default function GuestManagement({ guests, setGuests, lang, t, triggerToa
             className="w-full bg-slate-900 border border-slate-700 rounded-xl pl-10 pr-4 py-2 text-xs outline-none focus:border-indigo-500 transition text-white"
           />
         </div>
+
+        {/* Layout switching trigger buttons and Bulk Deselection quick-link */}
+        <div className="flex items-center justify-between sm:justify-end gap-3 font-medium">
+          <button
+            onClick={toggleSelectAll}
+            className={`px-3 py-1.5 border rounded-lg text-xs font-bold transition-all duration-150 ${
+              areAllFilteredSelected 
+                ? 'bg-indigo-600/15 border-indigo-500/30 text-indigo-400' 
+                : 'bg-[#131e35] border-slate-700 text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            {areAllFilteredSelected ? (lang === 'en' ? 'Deselect All' : 'លុបការជ្រើសរើសទាំងអស់') : (lang === 'en' ? 'Select All Filtered' : 'ជ្រើសរើសទាំងអស់')}
+          </button>
+
+          <div className="bg-slate-900/80 p-0.5 rounded-xl border border-slate-700/80 flex items-center shadow-inner">
+            <button
+              onClick={() => setViewMode('table')}
+              title={lang === 'en' ? 'Table Layout' : 'ប្លង់តារាង'}
+              className={`p-1.5 rounded-lg transition-all ${
+                viewMode === 'table' 
+                  ? 'bg-indigo-600 text-white shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <Table className="w-4 h-4" />
+            </button>
+            <button
+              onClick={() => setViewMode('grid')}
+              title={lang === 'en' ? 'Card Layout' : 'ប្លង់កាត'}
+              className={`p-1.5 rounded-lg transition-all ${
+                viewMode === 'grid' 
+                  ? 'bg-indigo-600 text-white shadow-sm' 
+                  : 'text-slate-400 hover:text-slate-200'
+              }`}
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
       </div>
 
-      {/* Guest Cards Directory Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-        {filtered.map(g => (
-          <div key={g.id} className="bg-slate-800/20 hover:bg-slate-800/40 border border-slate-700/60 p-5 rounded-2xl relative flex flex-col justify-between shadow-sm">
+      {viewMode === 'table' ? (
+        /* RENDER GUEST MANAGEMENT TABLE VIEW */
+        <div className="bg-slate-800/20 border border-slate-700/60 rounded-2xl overflow-hidden shadow-md animate-in fade-in duration-200">
+          <div className="overflow-x-auto text-xs">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-900 border-b border-slate-700/60 text-[10px] text-slate-400 font-bold uppercase tracking-wider font-mono">
+                  <th className="py-3.5 px-4 w-12 text-center">
+                    <input
+                      type="checkbox"
+                      checked={areAllFilteredSelected}
+                      onChange={toggleSelectAll}
+                      className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 cursor-pointer w-4 h-4"
+                    />
+                  </th>
+                  <th className="py-3.5 px-4">{t('guestName')}</th>
+                  <th className="py-3.5 px-4">Contact Details</th>
+                  <th className="py-3.5 px-4">ID Card / Passport</th>
+                  <th className="py-3.5 px-4">Privilege & Rights (សិទ្ធិ)</th>
+                  <th className="py-3.5 px-4">Emergency Contact</th>
+                  <th className="py-3.5 px-4">Stay Audit Record</th>
+                  <th className="py-3.5 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-700/40">
+                {filtered.map(g => {
+                  const isSelected = selectedIds.includes(g.id);
+                  return (
+                    <tr 
+                      key={g.id} 
+                      className={`transition-colors duration-150 ${
+                        isSelected ? 'bg-indigo-600/5 hover:bg-indigo-650/10' : 'hover:bg-slate-800/10'
+                      }`}
+                    >
+                      <td className="py-4 px-4 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleSelectOne(g.id)}
+                          className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 cursor-pointer w-4 h-4"
+                        />
+                      </td>
+                      <td className="py-4 px-4 font-bold text-white">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center font-bold text-white uppercase text-xs shrink-0 shadow-sm">
+                            {g.name.substring(0, 2)}
+                          </div>
+                          <div>
+                            <span className="block text-sm leading-tight text-slate-100">{g.name}</span>
+                            <span className="text-[10px] text-indigo-300 font-mono mt-0.5 block">ID: {g.id}</span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 text-slate-300 space-y-1">
+                        <div className="flex items-center gap-1.5 font-mono text-[11px]">
+                          <Phone className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+                          <span>{g.phone}</span>
+                        </div>
+                        {g.email && (
+                          <div className="flex items-center gap-1.5 text-slate-400">
+                             <Mail className="w-3.5 h-3.5 text-indigo-455 shrink-0" />
+                            <span className="truncate max-w-[160px] block">{g.email}</span>
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-4 px-4">
+                        <span className="text-[10px] bg-slate-800 border border-slate-700 text-slate-300 font-mono font-bold px-2 py-0.5 rounded uppercase shadow-sm">
+                          {g.id_passport}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4">
+                        {g.tier === 'VIP' ? (
+                          <div className="flex flex-col">
+                            <span className="text-[10px] bg-amber-500/15 border border-amber-500/30 text-amber-400 font-bold px-2 py-0.5 rounded uppercase w-max tracking-wider">
+                              👑 VIP Client
+                            </span>
+                            {g.discount ? (
+                              <span className="text-[9px] text-amber-300 font-mono mt-0.5 font-bold">{g.discount}% Privilege Discount</span>
+                            ) : null}
+                          </div>
+                        ) : g.tier === 'Authorized' ? (
+                          <div className="flex flex-col">
+                            <span className="text-[10px] bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold px-2 py-0.5 rounded uppercase w-max tracking-wide">
+                              🛡️ Authorized
+                            </span>
+                            {g.discount ? (
+                              <span className="text-[9px] text-emerald-300 font-mono mt-0.5 font-bold">{g.discount}% Auth Discount</span>
+                            ) : null}
+                          </div>
+                        ) : (
+                          <span className="text-[10px] bg-slate-850 border border-slate-800/80 text-slate-400 px-2 py-0.5 rounded uppercase">
+                            Standard (ធម្មតា)
+                          </span>
+                        )}
+                      </td>
+                      <td className="py-4 px-4">
+                        <div className="flex items-center gap-1.5 text-slate-300 font-semibold max-w-[185px] truncate">
+                          <Heart className="w-3.5 h-3.5 text-rose-455 shrink-0" />
+                          <span>{g.emergency || '-'}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 max-w-xs">
+                        <div className="flex items-start gap-1.5 text-slate-400">
+                          <FileText className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+                          <span className="line-clamp-2 leading-relaxed text-[11px] font-medium">{g.history || '-'}</span>
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => openEditModal(g)}
+                            title="Edit Profile & Rights"
+                            className="p-1.5 border border-amber-500/20 bg-amber-500/10 hover:bg-amber-600 hover:text-white text-amber-400 rounded-xl transition-all shadow-sm cursor-pointer"
+                          >
+                            <Edit className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              setSelectedGuestForQr(g);
+                              setCopiedPayload(false);
+                            }}
+                            title="Generate QR Pass Card"
+                            className="p-1.5 border border-indigo-500/20 bg-indigo-500/10 hover:bg-indigo-650 hover:text-white text-indigo-400 rounded-xl transition-all shadow-sm cursor-pointer"
+                          >
+                            <QrCode className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => removeGuest(g.id, g.name)}
+                            title="Remove Profile"
+                            className="p-1.5 border border-slate-755 hover:bg-rose-500/10 text-rose-400 rounded-xl transition-all shadow-sm cursor-pointer"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={7} className="py-12 text-center text-slate-500">
+                      {t('noRecords')}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : (
+        /* RENDER GUEST MANAGEMENT CARDS GRID VIEW */
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 animate-in fade-in duration-200">
+          {filtered.map(g => {
+            const isSelected = selectedIds.includes(g.id);
+            return (
+              <div 
+                key={g.id} 
+                className={`bg-slate-800/20 hover:bg-slate-800/40 border p-5 rounded-2xl relative flex flex-col justify-between shadow-sm transition-all duration-200 ${
+                  isSelected 
+                    ? 'border-indigo-500 bg-indigo-550/5 shadow-[0_0_20px_rgba(99,102,241,0.08)]' 
+                    : 'border-slate-700/60'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelectOne(g.id)}
+                        className="rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 cursor-pointer w-4 h-4 shrink-0 mr-1 shadow-sm"
+                      />
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center font-bold text-white uppercase text-sm shrink-0">
+                        {g.name.substring(0, 2)}
+                      </div>
+                      <div>
+                        <h4 className="font-bold text-white text-base leading-tight">{g.name}</h4>
+                        <div className="flex flex-wrap gap-1 mt-1 items-center">
+                          <span className="text-[9px] bg-slate-700/60 border border-slate-650 text-indigo-300 font-bold px-1.5 py-0.5 rounded uppercase">
+                            ID: {g.id_passport}
+                          </span>
+                          {g.tier === 'VIP' ? (
+                            <span className="text-[9px] bg-amber-500/15 border border-amber-500/30 text-amber-400 font-bold px-1.5 py-0.5 rounded uppercase">
+                              👑 VIP ({g.discount}% Off)
+                            </span>
+                          ) : g.tier === 'Authorized' ? (
+                            <span className="text-[9px] bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-bold px-1.5 py-0.5 rounded uppercase">
+                              🛡️ Auth ({g.discount}% Off)
+                            </span>
+                          ) : (
+                            <span className="text-[9px] bg-slate-800/80 border border-slate-755 text-slate-400 px-1.5 py-0.5 rounded uppercase">
+                              Standard
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <div className="flex items-center space-x-1.5 shrink-0">
+                      <button
+                        onClick={() => openEditModal(g)}
+                        title="Edit Profile & Rights"
+                        className="p-1.5 bg-amber-500/10 hover:bg-amber-600 border border-amber-500/20 text-amber-400 hover:text-white rounded-xl transition-all duration-150 cursor-pointer"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedGuestForQr(g);
+                          setCopiedPayload(false);
+                        }}
+                        title="Generate & View check-in QR Code"
+                        className="p-1.5 bg-indigo-500/10 hover:bg-indigo-600 border border-indigo-500/20 text-indigo-400 hover:text-white rounded-xl transition-all duration-150 cursor-pointer"
+                      >
+                        <QrCode className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => removeGuest(g.id, g.name)}
+                        className="p-1.5 border border-slate-755 text-rose-450 hover:bg-rose-500/10 rounded-xl transition-all duration-150 cursor-pointer"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Contact Details */}
+                  <div className="space-y-2 mt-4 pt-3 border-t border-slate-700/40 text-xs">
+                    <div className="flex items-center space-x-2 text-slate-300">
+                      <Phone className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="font-medium">{g.phone}</span>
+                    </div>
+                    <div className="flex items-center space-x-2 text-slate-300">
+                      <Mail className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="font-medium">{g.email || 'N/A'}</span>
+                    </div>
+                    <div className="flex items-start space-x-2 text-slate-300 pt-1">
+                      <Heart className="w-3.5 h-3.5 text-rose-400 mt-0.5 shrink-0" />
+                      <div>
+                        <span className="text-[10px] text-slate-400 uppercase tracking-wide block">Emergency contact:</span>
+                        <span className="font-semibold text-slate-200">{g.emergency || 'None reported'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Loyalty/incident records */}
+                <div className="mt-5 pt-3.5 border-t border-slate-700/50 bg-slate-900/40 p-2.5 rounded-xl flex items-start space-x-2">
+                  <FileText className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Stay Audit logs</span>
+                    <p className="text-[11px] text-slate-300 mt-0.5 font-medium leading-normal">{g.history}</p>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {filtered.length === 0 && (
+            <div className="col-span-full py-16 text-center bg-slate-800/10 border border-slate-700/60 rounded-2xl">
+              <p className="text-xs text-slate-400">{t('noRecords')}</p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Dynamic Slide-Up Bulk Control Actions Panel */}
+      {selectedIds.length > 0 && (
+        <div className="sticky bottom-6 z-40 bg-slate-900/95 border border-indigo-500/30 shadow-[0_10px_45px_rgba(0,0,0,0.55)] backdrop-blur-md p-4 rounded-2xl flex flex-col md:flex-row justify-between items-center gap-4 animate-in slide-in-from-bottom-6 duration-300">
+          <div className="flex items-center gap-3">
+            <span className="flex items-center justify-center bg-indigo-600 text-white font-mono font-bold text-xs w-6 h-6 rounded-full shrink-0 animate-pulse">
+              {selectedIds.length}
+            </span>
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-600 to-indigo-400 flex items-center justify-center font-bold text-white uppercase text-sm shrink-0">
-                    {g.name.substring(0, 2)}
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-white text-base leading-tight">{g.name}</h4>
-                    <span className="text-[10px] bg-slate-700/60 border border-slate-650 text-indigo-300 font-bold px-1.5 py-0.5 rounded uppercase mt-1 inline-block">
-                      ID: {g.id_passport}
-                    </span>
-                  </div>
-                </div>
-                
-                <div className="flex items-center space-x-1.5 shrink-0">
-                  <button
-                    onClick={() => {
-                      setSelectedGuestForQr(g);
-                      setCopiedPayload(false);
-                    }}
-                    title="Generate & View check-in QR Code"
-                    className="p-1.5 bg-indigo-500/10 hover:bg-indigo-600 border border-indigo-500/20 text-indigo-400 hover:text-white rounded-xl transition-all duration-150"
-                  >
-                    <QrCode className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => removeGuest(g.id, g.name)}
-                    className="p-1.5 border border-slate-755 text-rose-450 hover:bg-rose-500/10 rounded-xl transition-all duration-150"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Contact Details */}
-              <div className="space-y-2 mt-4 pt-3 border-t border-slate-700/40 text-xs">
-                <div className="flex items-center space-x-2 text-slate-300">
-                  <Phone className="w-3.5 h-3.5 text-indigo-400" />
-                  <span className="font-medium">{g.phone}</span>
-                </div>
-                <div className="flex items-center space-x-2 text-slate-300">
-                  <Mail className="w-3.5 h-3.5 text-indigo-400" />
-                  <span className="font-medium">{g.email || 'N/A'}</span>
-                </div>
-                <div className="flex items-start space-x-2 text-slate-300 pt-1">
-                  <Heart className="w-3.5 h-3.5 text-rose-400 mt-0.5 shrink-0" />
-                  <div>
-                    <span className="text-[10px] text-slate-400 uppercase tracking-wide block">Emergency contact:</span>
-                    <span className="font-semibold text-slate-200">{g.emergency || 'None reported'}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Loyalty/incident records */}
-            <div className="mt-5 pt-3.5 border-t border-slate-700/50 bg-slate-900/40 p-2.5 rounded-xl flex items-start space-x-2">
-              <FileText className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-              <div>
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">Stay Audit logs</span>
-                <p className="text-[11px] text-slate-300 mt-0.5 font-medium leading-normal">{g.history}</p>
-              </div>
+              <h5 className="text-xs font-bold text-white uppercase tracking-wider">Bulk Actions Active</h5>
+              <p className="text-[10px] text-slate-400">
+                You have highlighted {selectedIds.length} out of {guests.length} total guest profiles.
+              </p>
             </div>
           </div>
-        ))}
 
-        {filtered.length === 0 && (
-          <div className="col-span-full py-16 text-center bg-slate-800/10 border border-slate-700/60 rounded-2xl">
-            <p className="text-xs text-slate-400">{t('noRecords')}</p>
+          <div className="flex items-center gap-3.5 w-full md:w-auto justify-end">
+            {showBulkDeleteConfirm ? (
+              <div className="flex items-center gap-2.5 bg-rose-500/10 border border-rose-500/20 p-1.5 px-3 rounded-xl animate-in zoom-in-95 duration-150 select-none">
+                <span className="text-[10px] uppercase font-bold text-rose-400">
+                  Confirm bulk delete {selectedIds.length} records?
+                </span>
+                <button
+                  onClick={() => {
+                    setGuests(prev => prev.filter(g => !selectedIds.includes(g.id)));
+                    setSelectedIds([]);
+                    setShowBulkDeleteConfirm(false);
+                    triggerToast(`Archived ${selectedIds.length} customer profiles successfully.`);
+                  }}
+                  className="bg-rose-600 hover:bg-rose-500 text-white font-extrabold text-[10px] uppercase px-2.5 py-1 rounded transition duration-150"
+                >
+                  Verify Delete
+                </button>
+                <button
+                  onClick={() => setShowBulkDeleteConfirm(false)}
+                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-extrabold text-[10px] uppercase px-2.5 py-1 rounded transition border border-slate-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <>
+                <button
+                  onClick={exportSelectedGuests}
+                  className="flex items-center justify-center gap-1.5 bg-[#1e293b] hover:bg-[#1a2332] border border-slate-750 text-slate-100 font-bold text-[11px] px-3.5 py-2 rounded-xl transition shadow-md shrink-0 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-indigo-400" />
+                  <span>Export Selection (CSV)</span>
+                </button>
+                <button
+                  onClick={() => setShowBulkDeleteConfirm(true)}
+                  className="flex items-center justify-center gap-1.5 bg-rose-950/30 hover:bg-rose-900/40 border border-rose-500/20 text-rose-400 hover:text-rose-350 font-bold text-[11px] px-3.5 py-2 rounded-xl transition shadow-md shrink-0 cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Delete Selected ({selectedIds.length})</span>
+                </button>
+                <button
+                  onClick={() => setSelectedIds([])}
+                  className="text-slate-400 hover:text-slate-200 font-bold text-[11px] px-2 py-2 transition"
+                >
+                  Clear Selection
+                </button>
+              </>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Styled Add Guest Modal Dialog */}
       {showAddModal && (
@@ -244,8 +656,40 @@ export default function GuestManagement({ guests, setGuests, lang, t, triggerToa
                 <textarea 
                   value={history}
                   onChange={(e) => setHistory(e.target.value)}
-                  className="w-full h-16 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none resize-none focus:border-indigo-500"
+                  className="w-full h-14 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none resize-none focus:border-indigo-500"
                 ></textarea>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs font-mono font-bold text-slate-400">
+                <div>
+                  <label className="block text-[10px] uppercase mb-1">Privilege Rights (សិទ្ធិ)</label>
+                  <select 
+                    value={tier}
+                    onChange={(e) => {
+                      const v = e.target.value as 'Standard' | 'VIP' | 'Authorized';
+                      setTier(v);
+                      if (v === 'VIP') setDiscount(20);
+                      else if (v === 'Authorized') setDiscount(15);
+                      else setDiscount(0);
+                    }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                  >
+                    <option value="Standard" className="bg-slate-800">Standard (ធម្មតា)</option>
+                    <option value="Authorized" className="bg-slate-800">Authorized (មានសិទ្ធិ)</option>
+                    <option value="VIP" className="bg-slate-800">VIP (វីអាយភី)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase mb-1">Privilege Discount (%)</label>
+                  <input 
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={discount}
+                    onChange={(e) => setDiscount(Math.max(0, Math.min(100, Number(e.target.value))))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                  />
+                </div>
               </div>
 
               <div className="pt-4 border-t border-slate-700 flex justify-end gap-2.5">
@@ -367,6 +811,140 @@ export default function GuestManagement({ guests, setGuests, lang, t, triggerToa
                 <span>Print Pass</span>
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Profile & Rights Modal Dialog */}
+      {selectedGuestForEdit && (
+        <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center bg-transparent backdrop-blur-md px-4 animate-in fade-in duration-200">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 shadow-2xl relative">
+            <div className="flex justify-between items-center mb-4 pb-2 border-b border-slate-700/60">
+              <h3 className="text-sm font-bold uppercase tracking-wider text-amber-400 flex items-center gap-2">
+                <Shield className="w-4 h-4 text-amber-400 font-bold" />
+                <span>Edit Guest & Rights (សិទ្ធិអតិថិជន)</span>
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setSelectedGuestForEdit(null)}
+                className="p-1 text-slate-400 hover:text-slate-205 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleEditSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">{t('guestName')} *</label>
+                <input 
+                  type="text" 
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">{t('phone')} *</label>
+                  <input 
+                     type="text" 
+                     value={editPhone}
+                     onChange={(e) => setEditPhone(e.target.value)}
+                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
+                     required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-400 mb-1">{t('idPassport')} *</label>
+                  <input 
+                     type="text" 
+                     value={editIdPassport}
+                     onChange={(e) => setEditIdPassport(e.target.value)}
+                     className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
+                     required
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">{t('email')}</label>
+                <input 
+                  type="email" 
+                  value={editEmail}
+                  onChange={(e) => setEditEmail(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">{t('emergencyContact')}</label>
+                <input 
+                  type="text" 
+                  value={editEmergency}
+                  onChange={(e) => setEditEmergency(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
+                />
+               </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-400 mb-1">Remarks / Stay History Note</label>
+                <textarea 
+                  value={editHistory}
+                  onChange={(e) => setEditHistory(e.target.value)}
+                  className="w-full h-14 bg-slate-900 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white outline-none resize-none focus:border-indigo-500"
+                ></textarea>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 text-xs font-mono font-bold text-slate-400 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                <div>
+                  <label className="block text-[10px] uppercase text-slate-400 mb-1">Privilege Rights (សិទ្ធិ)</label>
+                  <select 
+                    value={editTier}
+                    onChange={(e) => {
+                      const v = e.target.value as 'Standard' | 'VIP' | 'Authorized';
+                      setEditTier(v);
+                      if (v === 'VIP') setEditDiscount(20);
+                      else if (v === 'Authorized') setEditDiscount(15);
+                      else setEditDiscount(0);
+                    }}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
+                  >
+                    <option value="Standard" className="bg-slate-800">Standard (ធម្មតា)</option>
+                    <option value="Authorized" className="bg-slate-800">Authorized (មានសិទ្ធិ)</option>
+                    <option value="VIP" className="bg-slate-800">VIP (វីអាយភី)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] uppercase text-slate-400 mb-1">Privilege Discount (%)</label>
+                  <input 
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={editDiscount}
+                    onChange={(e) => setEditDiscount(Math.max(0, Math.min(100, Number(e.target.value))))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-indigo-500"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 border-t border-slate-700 flex justify-end gap-2.5">
+                <button 
+                  type="button" 
+                  onClick={() => setSelectedGuestForEdit(null)}
+                  className="px-3.5 py-2 bg-slate-700 hover:bg-slate-650 rounded-lg text-xs font-semibold text-slate-300 cursor-pointer"
+                >
+                  {t('cancel')}
+                </button>
+                <button 
+                  type="submit" 
+                  className="px-4 py-2 bg-amber-500 hover:bg-amber-450 rounded-lg text-xs font-semibold text-slate-950 cursor-pointer"
+                >
+                  Apply Updates
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

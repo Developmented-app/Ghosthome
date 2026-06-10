@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Transaction } from '../types';
-import { Plus, Search, Filter, ArrowUpRight, ArrowDownRight, DollarSign, CreditCard, Layers } from 'lucide-react';
+import { Plus, Search, Filter, ArrowUpRight, ArrowDownRight, DollarSign, CreditCard, Layers, Coins } from 'lucide-react';
 
 interface IncomeExpenseProps {
   transactions: Transaction[];
@@ -8,11 +8,17 @@ interface IncomeExpenseProps {
   lang: string;
   t: (key: string) => string;
   triggerToast: (msg: string) => void;
+  exchangeRate: number;
+  setExchangeRate: React.Dispatch<React.SetStateAction<number>>;
 }
 
-export default function IncomeExpense({ transactions, setTransactions, lang, t, triggerToast }: IncomeExpenseProps) {
+export default function IncomeExpense({ transactions, setTransactions, lang, t, triggerToast, exchangeRate, setExchangeRate }: IncomeExpenseProps) {
   const [search, setSearch] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
+
+  // Converter tool states
+  const [calcUsd, setCalcUsd] = useState<string>('1');
+  const [calcKhr, setCalcKhr] = useState<string>(String(exchangeRate));
 
   // New Transaction Form state
   const [category, setCategory] = useState('');
@@ -57,10 +63,80 @@ export default function IncomeExpense({ transactions, setTransactions, lang, t, 
   return (
     <div className="space-y-6">
       
-      {/* Title */}
-      <div>
-        <h2 className="text-xl font-bold tracking-tight">{t('incomeExpense')}</h2>
-        <p className="text-xs text-slate-400">Track incoming rentals, operating expenditures, maintenance receipts, and salaries.</p>
+      {/* Title & Exchange Rate Banner */}
+      <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 bg-slate-800/20 border border-slate-700/60 p-5 rounded-2xl animate-in fade-in duration-200">
+        <div>
+          <h2 className="text-xl font-bold tracking-tight">{t('incomeExpense')}</h2>
+          <p className="text-xs text-slate-400">Track incoming rentals, operating expenditures, maintenance receipts, and salaries.</p>
+        </div>
+        
+        {/* Dynamic Currency Settings & Converter Widget */}
+        <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto bg-slate-900/60 border border-slate-700/55 rounded-xl p-3">
+          <div className="flex items-center gap-1.5 shrink-0">
+            <Coins className="w-4 h-4 text-amber-400" />
+            <span className="text-[11px] font-bold text-slate-300 uppercase tracking-widest">Rate (USD/KHR):</span>
+          </div>
+
+          {/* Rate Editor */}
+          <div className="bg-slate-950 border border-slate-700/85 rounded-lg px-2 py-1 flex items-center gap-1.5">
+            <span className="text-slate-450 text-[11px] font-bold">1 USD =</span>
+            <input 
+              type="number"
+              value={exchangeRate}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                if (val > 0) {
+                  setExchangeRate(val);
+                  if (calcUsd !== '') {
+                    setCalcKhr(String(Math.round(Number(calcUsd) * val)));
+                  }
+                }
+              }}
+              className="bg-transparent text-emerald-400 font-mono font-bold text-xs outline-none w-14 text-center"
+              title="Edit daily exchange rate"
+            />
+            <span className="text-slate-450 text-[11px] font-mono font-bold">KHR</span>
+          </div>
+
+          <div className="hidden sm:block border-l border-slate-700/60 h-5" />
+
+          {/* Conversion Tool on the fly */}
+          <div className="flex items-center gap-1 bg-slate-950 border border-slate-700/85 rounded-lg px-2 py-1">
+            <input 
+              type="number"
+              placeholder="USD"
+              value={calcUsd}
+              onChange={(e) => {
+                const v = e.target.value;
+                setCalcUsd(v);
+                if (v === '') {
+                  setCalcKhr('');
+                } else {
+                  setCalcKhr(String(Math.round(Number(v) * exchangeRate)));
+                }
+              }}
+              className="bg-transparent text-white font-mono text-xs w-12 outline-none text-center"
+            />
+            <span className="text-slate-500 text-[10px] font-bold">USD</span>
+            <span className="text-slate-400 text-[10px]">&harr;</span>
+            <input 
+              type="number"
+              placeholder="KHR"
+              value={calcKhr}
+              onChange={(e) => {
+                const v = e.target.value;
+                setCalcKhr(v);
+                if (v === '') {
+                  setCalcUsd('');
+                } else {
+                  setCalcUsd(String(Number((Number(v) / exchangeRate).toFixed(2))));
+                }
+              }}
+              className="bg-transparent text-white font-mono text-xs w-20 outline-none text-center"
+            />
+            <span className="text-slate-500 text-[10px] font-bold">KHR</span>
+          </div>
+        </div>
       </div>
 
       {/* Mini Profit & Loss Metric summary */}
@@ -69,6 +145,7 @@ export default function IncomeExpense({ transactions, setTransactions, lang, t, 
           <div>
             <span className="text-[10px] uppercase font-bold text-slate-400">{t('income')}</span>
             <h4 className="text-xl font-bold text-emerald-400 mt-1">${totalIncome.toFixed(2)}</h4>
+            <span className="text-[10px] font-mono font-bold text-emerald-500/95 block mt-0.5">≒ {Math.round(totalIncome * exchangeRate).toLocaleString()} KHR</span>
           </div>
           <ArrowUpRight className="w-8 h-8 text-emerald-500/30" />
         </div>
@@ -77,11 +154,12 @@ export default function IncomeExpense({ transactions, setTransactions, lang, t, 
           <div>
             <span className="text-[10px] uppercase font-bold text-slate-400">{t('expense')}</span>
             <h4 className="text-xl font-bold text-rose-400 mt-1">${totalExpense.toFixed(2)}</h4>
+            <span className="text-[10px] font-mono font-bold text-rose-550 block mt-0.5">≒ {Math.round(totalExpense * exchangeRate).toLocaleString()} KHR</span>
           </div>
           <ArrowDownRight className="w-8 h-8 text-rose-500/30" />
         </div>
 
-        <div className={`border p-4 rounded-xl flex items-center justify-between ${
+        <div className={`border p-4 rounded-xl flex items-center justify-between transition duration-200 ${
           ledgerBalance >= 0 ? 'bg-amber-500/10 border-amber-500/20' : 'bg-rose-500/10 border-rose-500/20'
         }`}>
           <div>
@@ -89,6 +167,9 @@ export default function IncomeExpense({ transactions, setTransactions, lang, t, 
             <h4 className={`text-xl font-bold mt-1 ${ledgerBalance >= 0 ? 'text-amber-400' : 'text-rose-400'}`}>
               ${ledgerBalance.toFixed(2)}
             </h4>
+            <span className={`text-[10px] font-mono font-bold block mt-0.5 ${ledgerBalance >= 0 ? 'text-amber-500/95' : 'text-rose-500/95'}`}>
+              ≒ {Math.round(ledgerBalance * exchangeRate).toLocaleString()} KHR
+            </span>
           </div>
           <DollarSign className="w-8 h-8 text-slate-500/30" />
         </div>
@@ -124,6 +205,11 @@ export default function IncomeExpense({ transactions, setTransactions, lang, t, 
                 className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3.5 py-2.5 text-xs text-white outline-none focus:border-indigo-500 transition"
                 required
               />
+              {amount > 0 && (
+                <span className="text-[10px] font-mono font-bold text-emerald-500/90 mt-1 block">
+                  ≒ {Math.round(amount * exchangeRate).toLocaleString()} KHR
+                </span>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -194,7 +280,7 @@ export default function IncomeExpense({ transactions, setTransactions, lang, t, 
                   <th className="py-3.5 px-4">{t('category')}</th>
                   <th className="py-3.5 px-4">{t('date')}</th>
                   <th className="py-3.5 px-4">{t('type')}</th>
-                  <th className="py-3.5 px-4 text-right">{t('amount')}</th>
+                  <th className="py-3.5 px-4 text-right">Amount (USD / KHR)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-700/40 font-mono">
@@ -212,7 +298,8 @@ export default function IncomeExpense({ transactions, setTransactions, lang, t, 
                     <td className={`py-3.5 px-4 text-right font-bold text-sm ${
                       item.type === 'Income' ? 'text-emerald-400' : 'text-rose-400'
                     }`}>
-                      {item.type === 'Income' ? '+' : '-'}${item.amount.toFixed(2)}
+                      <span className="block">{item.type === 'Income' ? '+' : '-'}${item.amount.toFixed(2)}</span>
+                      <span className="text-[10px] text-slate-400 font-mono font-bold block">≒ {item.type === 'Income' ? '+' : '-'}{Math.round(item.amount * exchangeRate).toLocaleString()} KHR</span>
                     </td>
                   </tr>
                 ))}

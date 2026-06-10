@@ -11,13 +11,13 @@ export const initialRooms: Room[] = [
 ];
 
 export const initialGuests: Guest[] = [
-  { id: 1, name: 'Sok Mean', phone: '+855 12 345 678', id_passport: 'N0918237', email: 'sokmean@gmail.com', emergency: 'Chhun Ly (+855 99 111 222)', history: '3 stays, 0 incident reports' },
-  { id: 2, name: 'John Doe', phone: '+1 415 888 9999', id_passport: 'A56123984', email: 'johndoe@gmail.com', emergency: 'Jane Doe (+1 415 888 1111)', history: 'First time guest' },
-  { id: 3, name: 'Nisay Roth', phone: '+855 85 555 123', id_passport: 'N231456', email: 'nisay@outlook.com', emergency: 'Pheap Roth (+855 10 999 888)', history: '2 stays' }
+  { id: 1, name: 'Sok Mean', phone: '+855 12 345 678', id_passport: 'N0918237', email: 'sokmean@gmail.com', emergency: 'Chhun Ly (+855 99 111 222)', history: '3 stays, 0 incident reports', tier: 'Authorized', discount: 15, is_authorized: true },
+  { id: 2, name: 'John Doe', phone: '+1 415 888 9999', id_passport: 'A56123984', email: 'johndoe@gmail.com', emergency: 'Jane Doe (+1 415 888 1111)', history: 'First time guest', tier: 'Standard', discount: 0, is_authorized: false },
+  { id: 3, name: 'Nisay Roth', phone: '+855 85 555 123', id_passport: 'N231456', email: 'nisay@outlook.com', emergency: 'Pheap Roth (+855 10 999 888)', history: '2 stays', tier: 'VIP', discount: 20, is_authorized: true }
 ];
 
 export const initialReservations: Reservation[] = [
-  { id: 1, guest_name: 'John Doe', room_no: '201', checkin: '2026-06-10', checkout: '2026-06-15', status: 'Confirmed', deposit: 50 },
+  { id: 1, guest_name: 'John Doe', room_no: '201', checkin: new Date().toISOString().split('T')[0], checkout: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], status: 'Confirmed', deposit: 50 },
   { id: 2, guest_name: 'Nisay Roth', room_no: '102', checkin: '2026-06-12', checkout: '2026-06-20', status: 'Pending', deposit: 0 },
   { id: 3, guest_name: 'Sok Mean', room_no: '101', checkin: '2026-01-05', checkout: '2026-01-15', status: 'Confirmed', deposit: 30 },
   { id: 4, guest_name: 'Chhun Ly', room_no: '102', checkin: '2026-01-10', checkout: '2026-01-28', status: 'Confirmed', deposit: 100 },

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Room, Transaction, Reservation } from '../types';
-import { ArrowUpRight, ArrowDownRight, Bed, Home, Users, DollarSign, Activity, AlertCircle } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Bed, Home, Users, DollarSign, Activity, AlertCircle, Clock, Sparkles, RefreshCw, Play, Filter } from 'lucide-react';
 import {
   BarChart,
   Bar,
@@ -22,6 +22,9 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ rooms, transactions, reservations, lang, t, setActiveTab }: DashboardProps) {
+  const [simulatedActivities, setSimulatedActivities] = React.useState<any[]>([]);
+  const [activityFilter, setActivityFilter] = React.useState<'all' | 'checkin' | 'checkout' | 'booking'>('all');
+
   // Calculations
   const totalRooms = rooms.length;
   const availableRooms = rooms.filter(r => r.status === 'Available').length;
@@ -105,6 +108,193 @@ export default function Dashboard({ rooms, transactions, reservations, lang, t, 
       bookings: bookingsInMonth
     };
   });
+
+  // Parser and Calculations for Live Activity Feed
+  const todayStr = React.useMemo(() => new Date().toISOString().split('T')[0], []);
+
+  const dynamicActivities = React.useMemo(() => {
+    const list: any[] = [];
+
+    reservations.forEach(r => {
+      // 1. Process Check-ins from Reservations for today
+      if (r.checkin === todayStr && r.status === 'Confirmed') {
+        list.push({
+          id: `checkin-${r.id}`,
+          type: 'checkin',
+          guestName: r.guest_name,
+          roomNo: r.room_no,
+          time: '08:30 AM',
+          details: lang === 'en' 
+            ? `Checked in successfully, $${r.deposit} deposit received` 
+            : `បានចូលស្នាក់នៅជោគជ័យ ព្រមទាំងបង់ប្រាក់កក់ $${r.deposit}`,
+          status: 'success',
+          timestamp: new Date(`${todayStr}T08:30:00`).getTime()
+        });
+      }
+
+      // 2. Process Check-outs from Reservations for today
+      if (r.checkout === todayStr && r.status === 'Confirmed') {
+        list.push({
+          id: `checkout-${r.id}`,
+          type: 'checkout',
+          guestName: r.guest_name,
+          roomNo: r.room_no,
+          time: '11:15 AM',
+          details: lang === 'en' 
+            ? `Checked out safely. Damage and utility check completed.`
+            : `បានចាកចេញដោយសុវត្ថិភាព។ បានត្រួតពិនិត្យការខូចខាត និងការប្រើប្រាស់ទឹកភ្លើងរួចរាល់។`,
+          status: 'info',
+          timestamp: new Date(`${todayStr}T11:15:00`).getTime()
+        });
+      }
+
+      // 3. Process New Bookings / Pending Bookings of today
+      if (r.id > 24 || r.status === 'Pending') {
+        list.push({
+          id: `booking-${r.id}`,
+          type: 'booking',
+          guestName: r.guest_name,
+          roomNo: r.room_no,
+          time: r.id > 24 ? 'Just now' : '02:20 PM',
+          details: lang === 'en'
+            ? `New booking registered for Room ${r.room_no} (deposit: $${r.deposit})`
+            : `ការកក់ថ្មីត្រូវបានចុះឈ្មោះសម្រាប់បន្ទប់ ${r.room_no} (ប្រាក់កក់៖ $${r.deposit})`,
+          status: 'pending',
+          timestamp: r.id > 24 ? Date.now() : new Date(`${todayStr}T14:20:00`).getTime()
+        });
+      }
+    });
+
+    // Fallbacks if no reservations match the physical calendar today so there is a rich initially populated list
+    if (list.length === 0) {
+      list.push({
+        id: 'mock-activity-1',
+        type: 'checkin',
+        guestName: 'John Doe',
+        roomNo: '101',
+        time: '09:00 AM',
+        details: lang === 'en' ? 'Checked in successfully, $50 deposit received' : 'បានចូលស្នាក់នៅជោគជ័យ ព្រមទាំងបង់ប្រាក់កក់ $50',
+        status: 'success',
+        timestamp: Date.now() - 3 * 3600 * 1000
+      });
+      list.push({
+        id: 'mock-activity-2',
+        type: 'booking',
+        guestName: 'Nisay Roth',
+        roomNo: '102',
+        time: '11:30 AM',
+        details: lang === 'en' ? 'Room reserved for June 12 - June 20' : 'បានកក់បន្ទប់សម្រាប់ថ្ងៃទី ១២ មិថុនា - ២០ មិថុនា',
+        status: 'pending',
+        timestamp: Date.now() - 2 * 3600 * 1000
+      });
+      list.push({
+        id: 'mock-activity-3',
+        type: 'checkout',
+        guestName: 'Sok Mean',
+        roomNo: '101',
+        time: '12:00 PM',
+        details: lang === 'en' ? 'Rooms keys returned. Laundry charges settled' : 'បានប្រគល់សោបន្ទប់វិញ និងទូទាត់ប្រាក់បោកគក់រួចរាល់',
+        status: 'info',
+        timestamp: Date.now() - 1 * 3600 * 1000
+      });
+    }
+
+    return list;
+  }, [reservations, lang, todayStr]);
+
+  // Combine real database-driven items with temporary user simulations
+  const allMergedActivities = React.useMemo(() => {
+    const combined = [...simulatedActivities, ...dynamicActivities];
+    // Sort so latest are on top
+    return combined.sort((a, b) => b.timestamp - a.timestamp);
+  }, [simulatedActivities, dynamicActivities]);
+
+  // Counts matching correct day
+  const todaySummaryCounts = React.useMemo(() => {
+    const checkins = allMergedActivities.filter(a => a.type === 'checkin').length;
+    const checkouts = allMergedActivities.filter(a => a.type === 'checkout').length;
+    const bookings = allMergedActivities.filter(a => a.type === 'booking').length;
+    return { checkins, checkouts, bookings };
+  }, [allMergedActivities]);
+
+  // Filtered list
+  const filteredActivities = React.useMemo(() => {
+    if (activityFilter === 'all') return allMergedActivities;
+    return allMergedActivities.filter(a => a.type === activityFilter);
+  }, [allMergedActivities, activityFilter]);
+
+  // Interactive Live Feed simulation injector
+  const triggerSimulation = () => {
+    const sampleNames = [
+      'Sophal Van', 'Leakena Srun', 'Oudom Chet', 'Vannak Kem', 
+      'Sopheak Dara', 'Makara Pich', 'Sreypich Meas', 'Kosal Heng'
+    ];
+    const sampleRooms = ['101', '102', '201', '202', '302', '401'];
+    const selectedName = sampleNames[Math.floor(Math.random() * sampleNames.length)];
+    const selectedRoom = sampleRooms[Math.floor(Math.random() * sampleRooms.length)];
+    
+    const typesList = ['checkin', 'checkout', 'booking'] as const;
+    const selectedType = typesList[Math.floor(Math.random() * typesList.length)];
+    
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    
+    let eventObj: any = {
+      id: `simulated-${Date.now()}`,
+      guestName: selectedName,
+      roomNo: selectedRoom,
+      time: timeString,
+      timestamp: Date.now()
+    };
+
+    if (selectedType === 'checkin') {
+      eventObj.type = 'checkin';
+      eventObj.status = 'success';
+      eventObj.details = lang === 'en'
+        ? `Checked into Room ${selectedRoom} successfully.`
+        : `បានចូលស្នាក់នៅជោគជ័យក្នុងបន្ទប់ ${selectedRoom}។`;
+    } else if (selectedType === 'checkout') {
+      eventObj.type = 'checkout';
+      eventObj.status = 'info';
+      eventObj.details = lang === 'en'
+        ? `Checked out from Room ${selectedRoom} safely.`
+        : `បានចាកចេញពីបន្ទប់ ${selectedRoom} ដោយសុវត្ថិភាព។`;
+    } else {
+      eventObj.type = 'booking';
+      eventObj.status = 'pending';
+      eventObj.details = lang === 'en'
+        ? `New booking registered for Room ${selectedRoom}.`
+        : `ការកក់ថ្មីត្រូវបានចុះឈ្មោះសម្រាប់បន្ទប់ ${selectedRoom}។`;
+    }
+
+    setSimulatedActivities(prev => [eventObj, ...prev]);
+
+    // Play high-tech audio tone for feedback
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const oscillator = audioCtx.createOscillator();
+      const gainNode = audioCtx.createGain();
+      oscillator.connect(gainNode);
+      gainNode.connect(audioCtx.destination);
+      oscillator.type = 'sine';
+      oscillator.frequency.setValueAtTime(1055, audioCtx.currentTime);
+      gainNode.gain.setValueAtTime(0.04, audioCtx.currentTime);
+      oscillator.start();
+      oscillator.stop(audioCtx.currentTime + 0.1);
+    } catch (err) {}
+  };
+
+  const getDayFormattedText = () => {
+    const d = new Date();
+    const options: Intl.DateTimeFormatOptions = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+    if (lang === 'en') {
+      return `Today, ${d.toLocaleDateString('en-US', options)}`;
+    } else {
+      const daysKh = ['អាទិត្យ', 'ច័ន្ទ', 'អង្គារ', 'ពុធ', 'ព្រហស្បតិ៍', 'សុក្រ', 'សៅរ៍'];
+      const monthsKh = ['មករា', 'កុម្ភៈ', 'មីនា', 'មេសា', 'ឧសភា', 'មិថុនា', 'កក្កដា', 'សីហា', 'កញ្ញា', 'តុលា', 'វិច្ឆិកា', 'ធ្នូ'];
+      return `ថ្ងៃនេះ ថ្ងៃ${daysKh[d.getDay()]} ទី${d.getDate()} ខែ${monthsKh[d.getMonth()]} ឆ្នាំ${d.getFullYear()}`;
+    }
+  };
 
   const CustomTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
@@ -363,64 +553,186 @@ export default function Dashboard({ rooms, transactions, reservations, lang, t, 
         </div>
       </div>
 
-      {/* Recharts Monthly Occupancy Analysis Bar Chart */}
-      <div className="bg-slate-800/40 border border-slate-700/70 p-6 rounded-2xl shadow-sm">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-700 pb-4 mb-5">
+      {/* Recharts Monthly Occupancy Bar Chart & Live Activity Feed side by side */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Recharts Monthly Occupancy Analysis Bar Chart */}
+        <div className="lg:col-span-2 bg-slate-800/40 border border-slate-700/70 p-6 rounded-2xl shadow-sm flex flex-col justify-between">
           <div>
-            <h4 className="font-bold text-slate-100 text-sm flex items-center gap-2 uppercase tracking-wide">
-              <Activity className="w-4.5 h-4.5 text-indigo-400 shrink-0" />
-              <span>{lang === 'en' ? 'Reservations-Based Occupancy Analysis (2026)' : 'ការវិភាគអត្រាស្នាក់នៅផ្អែកលើការកក់បន្ទប់ (២០២៦)'}</span>
-            </h4>
-            <p className="text-xs text-slate-400 mt-1">
-              {lang === 'en' 
-                ? 'Calculated dynamics matching confirmed stays, active intervals, and daily database bookings.' 
-                : 'លទ្ធផលគណនាដោយស្វ័យប្រវត្តិតាមរយៈកាលបរិច្ឆេទនៃការកក់ និងការស្នាក់នៅរបស់ភ្ញៀវពិតប្រាកដ។'}
-            </p>
-          </div>
-          <div className="flex items-center gap-2 text-[11px] font-semibold text-indigo-300 bg-slate-900/60 border border-slate-700/50 px-3 py-1 rounded-lg">
-            <span className="w-2.5 h-2.5 rounded bg-indigo-500 animate-pulse"></span>
-            <span>{lang === 'en' ? 'Occupancy Intensity %' : 'ភាគរយអត្រាស្នាក់នៅ'}</span>
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-700 pb-4 mb-5">
+              <div>
+                <h4 className="font-bold text-slate-100 text-sm flex items-center gap-2 uppercase tracking-wide">
+                  <Activity className="w-4.5 h-4.5 text-indigo-400 shrink-0" />
+                  <span>{lang === 'en' ? 'Reservations-Based Occupancy Analysis (2026)' : 'ការវិភាគអត្រាស្នាក់នៅផ្អែកលើការកក់បន្ទប់ (២០២៦)'}</span>
+                </h4>
+                <p className="text-xs text-slate-400 mt-1">
+                  {lang === 'en' 
+                    ? 'Calculated dynamics matching confirmed stays, active intervals, and daily database bookings.' 
+                    : 'លទ្ធផលគណនាដោយស្វ័យប្រវត្តិតាមរយៈកាលបរិច្ឆេទនៃការកក់ និងការស្នាក់នៅរបស់ភ្ញៀវពិតប្រាកដ។'}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] font-semibold text-indigo-300 bg-slate-900/60 border border-slate-700/50 px-3 py-1 rounded-lg">
+                <span className="w-2.5 h-2.5 rounded bg-indigo-500 animate-pulse"></span>
+                <span>{lang === 'en' ? 'Occupancy Intensity %' : 'ភាគរយអត្រាស្នាក់នៅ'}</span>
+              </div>
+            </div>
+
+            <div className="w-full h-72">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} />
+                  <XAxis 
+                    dataKey="month" 
+                    stroke="#64748b" 
+                    fontSize={11} 
+                    tickLine={false} 
+                    axisLine={false} 
+                  />
+                  <YAxis 
+                    stroke="#64748b" 
+                    fontSize={11} 
+                    tickLine={false} 
+                    axisLine={false}
+                    domain={[0, 100]}
+                    tickFormatter={(val) => `${val}%`}
+                  />
+                  <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b', opacity: 0.15 }} />
+                  <Bar 
+                    dataKey="rate" 
+                    fill="#6366f1" 
+                    radius={[4, 4, 0, 0]}
+                    maxBarSize={45}
+                  >
+                    {chartData.map((entry, index) => {
+                      const isJune = index === 5; // Highlight June (current month target)
+                      return (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={isJune ? '#818cf8' : entry.rate > 40 ? '#6366f1' : entry.rate > 20 ? '#4f46e5' : '#312e81'} 
+                        />
+                      );
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         </div>
 
-        <div className="w-full h-72">
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#334155" opacity={0.3} />
-              <XAxis 
-                dataKey="month" 
-                stroke="#64748b" 
-                fontSize={11} 
-                tickLine={false} 
-                axisLine={false} 
-              />
-              <YAxis 
-                stroke="#64748b" 
-                fontSize={11} 
-                tickLine={false} 
-                axisLine={false}
-                domain={[0, 100]}
-                tickFormatter={(val) => `${val}%`}
-              />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: '#1e293b', opacity: 0.15 }} />
-              <Bar 
-                dataKey="rate" 
-                fill="#6366f1" 
-                radius={[4, 4, 0, 0]}
-                maxBarSize={45}
-              >
-                {chartData.map((entry, index) => {
-                  const isJune = index === 5; // Highlight June (current month target)
-                  return (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={isJune ? '#818cf8' : entry.rate > 40 ? '#6366f1' : entry.rate > 20 ? '#4f46e5' : '#312e81'} 
-                    />
-                  );
-                })}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
+        {/* Live Activity Feed Panel */}
+        <div className="bg-slate-800/40 border border-slate-700/70 p-6 rounded-2xl shadow-sm flex flex-col justify-between">
+          <div className="space-y-4">
+            {/* Title & Date */}
+            <div className="border-b border-slate-700 pb-4">
+              <div className="flex items-center justify-between">
+                <h4 className="font-bold text-slate-100 text-sm flex items-center gap-2 uppercase tracking-wide">
+                  <Sparkles className="w-4.5 h-4.5 text-amber-400 animate-pulse shrink-0" />
+                  <span>{lang === 'en' ? 'Live Activity Feed' : 'សកម្មភាពផ្សាយផ្ទាល់'}</span>
+                </h4>
+                <span className="flex h-2 w-2 relative shrink-0">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+              </div>
+              <p className="text-[10px] text-slate-400 font-mono mt-0.5">{getDayFormattedText()}</p>
+            </div>
+
+            {/* Quick Summary Badges */}
+            <div className="grid grid-cols-3 gap-2 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800">
+              <div className="text-center">
+                <span className="block text-[10px] font-medium text-slate-400">{lang === 'en' ? 'In' : 'ចូល'}</span>
+                <span className="text-sm font-extrabold text-emerald-400">{todaySummaryCounts.checkins}</span>
+              </div>
+              <div className="text-center border-x border-slate-800/80">
+                <span className="block text-[10px] font-medium text-slate-400">{lang === 'en' ? 'Out' : 'ចេញ'}</span>
+                <span className="text-sm font-extrabold text-indigo-400">{todaySummaryCounts.checkouts}</span>
+              </div>
+              <div className="text-center">
+                <span className="block text-[10px] font-medium text-slate-400">{lang === 'en' ? 'Book' : 'កក់'}</span>
+                <span className="text-sm font-extrabold text-amber-400">{todaySummaryCounts.bookings}</span>
+              </div>
+            </div>
+
+            {/* Selector Categories Tab */}
+            <div className="flex gap-1 bg-slate-900/40 p-1 rounded-lg border border-slate-800/80">
+              {(['all', 'checkin', 'checkout', 'booking'] as const).map(tab => (
+                <button
+                  key={tab}
+                  onClick={() => setActivityFilter(tab)}
+                  className={`flex-1 text-[9px] font-bold py-1 px-1.5 rounded transition uppercase font-mono ${
+                    activityFilter === tab 
+                      ? 'bg-indigo-600 text-white' 
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
+                  }`}
+                >
+                  {tab === 'all' ? (lang === 'en' ? 'All' : 'ទាំងអស់') : 
+                   tab === 'checkin' ? (lang === 'en' ? 'Check-Ins' : 'ចូល') : 
+                   tab === 'checkout' ? (lang === 'en' ? 'Check-Outs' : 'ចេញ') : 
+                   (lang === 'en' ? 'Bookings' : 'ការកក់')}
+                </button>
+              ))}
+            </div>
+
+            {/* Interactive Timeline Body */}
+            <div className="overflow-y-auto max-h-72 space-y-4 pr-1.5 scrollbar-none">
+              {filteredActivities.length === 0 ? (
+                <div className="text-center py-10 text-slate-500 text-xs">
+                  {lang === 'en' ? 'No recent activities matching filter.' : 'មិនមានសកម្មភាពថ្មីៗសម្រាប់ប្រភេទចម្រោះនេះឡើយ។'}
+                </div>
+              ) : (
+                <div className="relative border-l border-slate-700/80 ml-3 space-y-4">
+                  {filteredActivities.map((act) => {
+                    const isCheckin = act.type === 'checkin';
+                    const isCheckout = act.type === 'checkout';
+
+                    let dotColor = 'bg-amber-400 ring-amber-500/20';
+                    let bgHover = 'hover:bg-amber-500/5';
+                    if (isCheckin) {
+                      dotColor = 'bg-emerald-400 ring-emerald-500/20';
+                      bgHover = 'hover:bg-emerald-500/5';
+                    } else if (isCheckout) {
+                      dotColor = 'bg-indigo-400 ring-indigo-500/20';
+                      bgHover = 'hover:bg-indigo-500/5';
+                    }
+
+                    return (
+                      <div key={act.id} className={`relative pl-6 group transition duration-150 rounded-xl py-1.5 -ml-1 ${bgHover}`}>
+                        {/* Circle Bullet indicator */}
+                        <span className={`absolute -left-1.5 top-3 h-2 w-2 rounded-full ${dotColor} ring-4 group-hover:scale-110 transition duration-150`}></span>
+                        
+                        <div className="flex justify-between items-start gap-2">
+                          <div className="min-w-0 flex-1">
+                            <span className="text-[11px] font-bold text-slate-100 flex items-center gap-1.5 flex-wrap">
+                              <span>{act.guestName}</span>
+                              <span className="text-[9px] font-mono font-black py-0.5 px-1.5 rounded-md bg-slate-900 border border-slate-800 text-slate-350">
+                                Room {act.roomNo}
+                              </span>
+                            </span>
+                            <p className="text-[10px] text-slate-400 mt-1 leading-normal whitespace-pre-wrap">
+                              {act.details}
+                            </p>
+                          </div>
+                          <span className="text-[8px] font-mono text-slate-500 bg-slate-950 px-1.5 py-0.5 rounded shrink-0 self-start group-hover:text-slate-350 transition">
+                            {act.time}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Simulate Event Button */}
+          <div className="pt-4 border-t border-slate-800 mt-2">
+            <button
+              onClick={triggerSimulation}
+              className="w-full py-2 bg-gradient-to-r from-amber-500/10 to-indigo-500/10 hover:from-amber-400/15 hover:to-indigo-500/15 border border-slate-700 hover:border-slate-600 text-[10px] font-bold text-slate-300 font-mono flex items-center justify-center gap-2 rounded-xl transition duration-150 shadow-sm"
+            >
+              <RefreshCw className="w-3.5 h-3.5 text-indigo-450 animate-spin-slow" />
+              <span>{lang === 'en' ? 'SIMULATE REAL-TIME GUEST EVENT' : 'សាកល្បងសកម្មភាពភ្ញៀវថ្មី'}</span>
+            </button>
+          </div>
         </div>
       </div>
 

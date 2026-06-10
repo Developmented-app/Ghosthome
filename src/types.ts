@@ -17,6 +17,9 @@ export interface Guest {
   email: string;
   emergency: string;
   history: string;
+  tier?: 'Standard' | 'VIP' | 'Authorized';
+  discount?: number;
+  is_authorized?: boolean;
 }
 
 export interface Reservation {

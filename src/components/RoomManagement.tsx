@@ -1,16 +1,30 @@
 import React, { useState } from 'react';
-import { Room } from '../types';
-import { Plus, Trash2, Search, Filter, ShieldAlert, CheckCircle, PenTool, Bed, LayoutGrid, Map, Activity, Circle, Settings2 } from 'lucide-react';
+import { Room, SystemNotification } from '../types';
+import { Plus, Trash2, Search, Filter, ShieldAlert, CheckCircle, PenTool, Bed, LayoutGrid, Map, Activity, Circle, Settings2, Calendar, Wrench, Clock } from 'lucide-react';
+
+const getRoomLastServicedDate = (roomNo: string) => {
+  const mapping: Record<string, { date: string, notes: string }> = {
+    '101': { date: '2026-06-08', notes: 'Housekeeping complete' },
+    '102': { date: '2026-06-05', notes: 'HVAC filter checked' },
+    '201': { date: '2026-06-07', notes: 'Bedding refreshed' },
+    '202': { date: '2026-06-08', notes: 'Sanitized inspect clear' },
+    '301': { date: '2026-06-04', notes: 'Deep clean major service' },
+    '302': { date: '2026-06-06', notes: 'Sanitized & prepped' },
+    '401': { date: '2026-06-09', notes: 'Premium VIP refresh' }
+  };
+  return mapping[roomNo] || { date: '2026-06-08', notes: 'Routine check' };
+};
 
 interface RoomManagementProps {
   rooms: Room[];
   setRooms: React.Dispatch<React.SetStateAction<Room[]>>;
+  notifications?: SystemNotification[];
   lang: string;
   t: (key: string) => string;
   triggerToast: (msg: string) => void;
 }
 
-export default function RoomManagement({ rooms, setRooms, lang, t, triggerToast }: RoomManagementProps) {
+export default function RoomManagement({ rooms, setRooms, notifications, lang, t, triggerToast }: RoomManagementProps) {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [typeFilter, setTypeFilter] = useState('All');
@@ -19,6 +33,24 @@ export default function RoomManagement({ rooms, setRooms, lang, t, triggerToast 
   // Custom interactive states for floor plan
   const [viewMode, setViewMode] = useState<'catalog' | 'floorplan'>('catalog');
   const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null);
+
+  // Helper to check if a room has a pending utility task
+  const hasPendingUtilityTask = (roomNo: string) => {
+    // 1. Check if there is an active warning notification containing "Room {roomNo}"
+    const hasWarningNotif = notifications?.some(n => 
+      n.type === 'Warning' && 
+      n.text.includes(`Room ${roomNo}`)
+    );
+    if (hasWarningNotif) return true;
+
+    // 2. Default initial condition: Room 102 has a pending utility task 
+    // unless the corresponding notification with ID 1 was cleared
+    if (roomNo === '102') {
+      return notifications ? notifications.some(n => n.id === 1) : true;
+    }
+
+    return false;
+  };
 
   const getFloorLabel = (floorStr: string) => {
     if (floorStr === '1st') return lang === 'en' ? '1st Floor - Deluxe Lobby Wings' : 'ជាន់ទី ១ - សេវាផ្នែកខាងមុខ';
@@ -226,7 +258,8 @@ export default function RoomManagement({ rooms, setRooms, lang, t, triggerToast 
           {filtered.map(room => (
             <div 
               key={room.id}
-              className={`border rounded-2xl p-5 bg-slate-800/20 hover:bg-slate-800/40 transition duration-200 shadow-sm relative overflow-hidden ${
+              className={`border rounded-2xl p-5 bg-slate-800/20 hover:bg-slate-800/40 transition duration-200 shadow-sm relative overflow-hidden group ${
+                hasPendingUtilityTask(room.room_no) ? 'border-rose-500/50 ring-1 ring-rose-500/10 shadow-[0_0_15px_rgba(244,63,94,0.1)]' :
                 room.status === 'Available' ? 'border-emerald-500/20' : 
                 room.status === 'Occupied' ? 'border-indigo-500/20' :
                 room.status === 'Reserved' ? 'border-amber-500/20' : 'border-rose-500/20'
@@ -234,6 +267,7 @@ export default function RoomManagement({ rooms, setRooms, lang, t, triggerToast 
             >
               {/* Corner status colored strip */}
               <div className={`absolute top-0 right-0 left-0 h-1.5 ${
+                hasPendingUtilityTask(room.room_no) ? 'bg-gradient-to-r from-rose-500 via-pink-400 to-rose-500 animate-pulse' :
                 room.status === 'Available' ? 'bg-emerald-500' : 
                 room.status === 'Occupied' ? 'bg-indigo-500' :
                 room.status === 'Reserved' ? 'bg-amber-500' : 'bg-rose-500'
@@ -270,6 +304,24 @@ export default function RoomManagement({ rooms, setRooms, lang, t, triggerToast 
                 </div>
               </div>
 
+              {/* Maintenance Due Alert with pulsating indicator */}
+              {hasPendingUtilityTask(room.room_no) && (
+                <div className="mt-3.5 bg-rose-500/10 border border-rose-500/20 px-3.5 py-2.5 rounded-xl flex items-center gap-2.5 animate-pulse">
+                  <div className="relative flex h-2.5 w-2.5 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-450 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500 shadow-[0_0_8px_rgba(239,68,68,0.7)]"></span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[10px] font-black text-rose-450 uppercase tracking-widest leading-none">
+                      {lang === 'en' ? 'Maintenance Due' : 'ត្រូវកែលម្អជាបន្ទាន់'}
+                    </p>
+                    <p className="text-[9px] text-slate-400 leading-tight mt-1">
+                      {lang === 'en' ? 'Utility Meter Reading Overdue' : 'ត្រូវការវាស់ស្ទង់ស៊ីទែនទឹកឬភ្លើង'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Actions Panel inside Card */}
               <div className="mt-5 pt-3.5 border-t border-slate-700/50 flex justify-between gap-2">
                 <button
@@ -300,6 +352,39 @@ export default function RoomManagement({ rooms, setRooms, lang, t, triggerToast 
                 >
                   <Trash2 className="w-3.5 h-3.5" />
                 </button>
+              </div>
+
+              {/* Slide-up interactive hover HUD stats panel */}
+              <div className="absolute inset-x-0 bottom-0 p-4 bg-slate-950/95 border-t border-indigo-500/30 transform translate-y-full group-hover:translate-y-0 transition-transform duration-300 pointer-events-none z-30 flex flex-col justify-center space-y-2.5">
+                <div className="flex items-center justify-between border-b border-slate-800/80 pb-1.5">
+                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-1.5 font-sans">
+                    <Activity className="w-3.5 h-3.5 text-indigo-400 shrink-0 animate-pulse" />
+                    <span>{lang === 'en' ? 'Live Stat Engine' : 'ម៉ាស៊ីនស្ថិតិលម្អិត'}</span>
+                  </span>
+                  <span className="text-[8px] bg-indigo-500/10 border border-indigo-500/25 text-indigo-300 font-mono font-black px-1.5 py-0.5 rounded leading-none">
+                    Room #{room.room_no}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 text-[10px] font-mono leading-tight">
+                  <div className="bg-slate-900 border border-slate-800/80 p-2 rounded-lg">
+                    <span className="block text-slate-500 text-[8px] uppercase tracking-wider font-bold mb-0.5">{lang === 'en' ? 'Base Rate:' : 'ថ្លៃបន្ទប់គុល:'}</span>
+                    <span className="text-white font-extrabold text-[11px]">${room.daily_price}/day</span>
+                  </div>
+                  <div className="bg-slate-900 border border-slate-800/80 p-2 rounded-lg">
+                    <span className="block text-slate-500 text-[8px] uppercase tracking-wider font-bold mb-0.5">{lang === 'en' ? 'Monthly Base:' : 'ថ្លៃប្រចាំខែ:'}</span>
+                    <span className="text-white font-extrabold text-[11px]">${room.monthly_price}/mo</span>
+                  </div>
+                </div>
+
+                <div className="bg-slate-900 border border-slate-800/80 p-2.5 rounded-lg flex items-start gap-2 text-[10px] text-slate-300 leading-normal">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-400 shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <span className="block text-[8px] text-slate-500 font-bold uppercase tracking-wider leading-none">{lang === 'en' ? 'Last Serviced:' : 'ថែទាំចុងក្រោយ:'}</span>
+                    <span className="font-extrabold text-slate-100 mt-1 inline-block leading-none">{getRoomLastServicedDate(room.room_no).date}</span>
+                    <p className="text-[9px] text-slate-400 leading-tight mt-1 truncate">{getRoomLastServicedDate(room.room_no).notes}</p>
+                  </div>
+                </div>
               </div>
             </div>
           ))}
@@ -373,23 +458,40 @@ export default function RoomManagement({ rooms, setRooms, lang, t, triggerToast 
                             key={room.id}
                             type="button"
                             onClick={() => setSelectedRoomId(selectedRoomId === room.id ? null : room.id)}
-                            className={`relative rounded-xl p-3.5 text-left border flex flex-col justify-between h-28 transition-all duration-200 outline-none ${
+                            className={`relative rounded-xl p-3.5 text-left border flex flex-col justify-between h-28 transition-all duration-200 outline-none group ${
                               isFilteredOut ? 'opacity-30 saturate-50' : 'opacity-100'
                             } ${
                               isSelected 
                                 ? 'ring-2 ring-indigo-500 bg-slate-800/80 scale-[1.04] shadow-lg z-20' 
                                 : 'bg-slate-900/40 hover:bg-slate-800/50'
                             } ${
+                              hasPendingUtilityTask(room.room_no) ? 'border-rose-500 hover:border-rose-455 shadow-[0_0_15px_rgba(244,63,94,0.15)] ring-1 ring-rose-500/10 animate-pulse' :
                               room.status === 'Available' ? 'border-emerald-500/40 hover:border-emerald-500/70 shadow-[0_0_12px_rgba(16,185,129,0.05)]' :
                               room.status === 'Occupied' ? 'border-rose-500/40 hover:border-rose-500/70 shadow-[0_0_12px_rgba(244,63,94,0.05)]' :
                               room.status === 'Reserved' ? 'border-amber-500/40 hover:border-amber-500/70 shadow-[0_0_12px_rgba(245,158,11,0.05)]' :
                               'border-slate-700 hover:border-slate-500'
                             }`}
                           >
+                            {/* Pulsating Indicator Badge */}
+                            {hasPendingUtilityTask(room.room_no) && (
+                              <span className="absolute top-1.5 right-1.5 flex h-2.5 w-2.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-rose-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-rose-500 shadow-[0_0_6px_rgba(239,68,68,0.8)]"></span>
+                              </span>
+                            )}
+
                             <div className="flex justify-between items-start w-full">
-                              <span className="text-lg font-black text-white tracking-tight">#{room.room_no}</span>
+                              <div className="flex flex-col">
+                                <span className="text-lg font-black text-white tracking-tight">#{room.room_no}</span>
+                                {hasPendingUtilityTask(room.room_no) && (
+                                  <span className="text-[8px] text-rose-400 font-extrabold uppercase tracking-wide leading-none animate-pulse mt-0.5 whitespace-nowrap">
+                                    ⚠️ Maint Due
+                                  </span>
+                                )}
+                              </div>
                               <div className="flex items-center">
                                 <span className={`w-2.5 h-2.5 rounded-full ${
+                                  hasPendingUtilityTask(room.room_no) ? 'bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.8)] animate-pulse' :
                                   room.status === 'Available' ? 'bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.6)]' :
                                   room.status === 'Occupied' ? 'bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.6)] animate-pulse' :
                                   room.status === 'Reserved' ? 'bg-amber-500 shadow-[0_0_6px_rgba(245,158,11,0.6)]' :
@@ -403,6 +505,35 @@ export default function RoomManagement({ rooms, setRooms, lang, t, triggerToast 
                               <div className="flex items-center justify-between text-[11px] text-slate-300 font-bold pt-1 border-t border-slate-700/60 leading-none">
                                 <span>${room.daily_price}/d</span>
                                 <span className="text-[9px] text-slate-500">{room.capacity}👥</span>
+                              </div>
+                            </div>
+
+                            {/* Hover Tooltip Popup for Floorplan Cells */}
+                            <div className="absolute hidden group-hover:block z-35 bottom-full mb-2.5 left-1/2 transform -translate-x-1/2 bg-[#090d16] border border-indigo-500/45 p-3 rounded-xl shadow-[0_10px_30px_rgba(0,0,0,0.6)] text-[10px] space-y-1.5 w-44 pointer-events-none transition-all duration-200 leading-normal animate-in fade-in zoom-in-95 duration-100">
+                              {/* Pointer arrow down */}
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-[5px] border-transparent border-t-[#090d16] z-10"></div>
+                              <div className="absolute top-full left-1/2 transform -translate-x-1/2 -mt-1 border-[5px] border-transparent border-t-indigo-500/45 z-0"></div>
+
+                              <div className="flex items-center justify-between border-b border-slate-800/80 pb-1 font-bold">
+                                <span className="text-white">Room #{room.room_no} Stats</span>
+                                <span className="text-indigo-400 font-mono font-bold">${room.daily_price}/d</span>
+                              </div>
+                              <div className="space-y-0.5 font-mono text-[9px] text-slate-300">
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">BASE RATE:</span>
+                                  <span className="text-white font-extrabold">${room.daily_price}/day</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="text-slate-500">MONTHLY:</span>
+                                  <span className="text-white font-extrabold">${room.monthly_price}/mo</span>
+                                </div>
+                                <div className="flex justify-between border-t border-slate-800/80 pt-1 mt-1">
+                                  <span className="text-slate-500 font-sans">{lang === 'en' ? 'LAST SERVICE:' : 'សេវាចុងក្រោយ:'}</span>
+                                  <span className="text-indigo-300 font-bold font-sans">{getRoomLastServicedDate(room.room_no).date}</span>
+                                </div>
+                              </div>
+                              <div className="text-[8px] text-slate-400 italic pt-0.5 truncate leading-none">
+                                {getRoomLastServicedDate(room.room_no).notes}
                               </div>
                             </div>
                           </button>
@@ -463,6 +594,23 @@ export default function RoomManagement({ rooms, setRooms, lang, t, triggerToast 
                     <span className="text-xs font-bold text-slate-100">{selectedRoom.capacity} Guests authorized</span>
                   </div>
                 </div>
+
+                {/* Pending Utility Task Warning Box in Workspace Control HUD */}
+                {hasPendingUtilityTask(selectedRoom.room_no) && (
+                  <div className="bg-rose-500/10 border border-rose-500/25 p-4 rounded-xl flex items-start gap-3.5 text-xs text-rose-455 animate-pulse my-3">
+                    <ShieldAlert className="w-5 h-5 text-rose-405 shrink-0 mt-0.5 animate-bounce" />
+                    <div className="space-y-1">
+                      <h4 className="font-extrabold uppercase tracking-wider text-[11px] text-rose-400">
+                        ⚠️ Needs Immediate Maintenance Check (Utility Meter Overdue)
+                      </h4>
+                      <p className="text-slate-300 leading-relaxed text-[11px]">
+                        {lang === 'en' 
+                          ? `Room ${selectedRoom.room_no} is flagged for an overdue utility meter reading task. Ensure water and electricity configurations are registered. Click on 'Utility Billing' to sync settings immediately.`
+                          : `បន្ទប់លេខ ${selectedRoom.room_no} ខកខានមិនបានរាយការណ៍ព័ត៌មានទឹកឬភ្លើង។ សូមចុះវាស់ស្ទង់ស៊ីទែន និងបង្កើតវិក្កយបត្រថ្មី។`}
+                      </p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Quick actions direct interactive buttons */}
                 <div className="flex flex-wrap items-center gap-3 pt-2">
