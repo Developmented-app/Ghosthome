@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Room, Guest, Reservation, CrmNote } from '../types';
 import { 
   Calendar, 
@@ -135,6 +135,72 @@ export default function GuestPortal({
     d.setDate(d.getDate() + 3);
     return d.toISOString().split('T')[0];
   });
+
+  // AI Stay Recommendation States
+  const [aiRecommendation, setAiRecommendation] = useState<{
+    recommendedRoomType: string;
+    reasoning: string;
+    upgradeIncentive: string;
+    poeticVibe: string;
+    priorityBulletpoints: string[];
+  } | null>(null);
+  const [isAiLoading, setIsAiLoading] = useState<boolean>(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  // Trigger recommendation loading on login
+  useEffect(() => {
+    if (isLoggedIn && authedUser) {
+      const fetchRecommendation = async () => {
+        setIsAiLoading(true);
+        setAiError(null);
+        try {
+          // Find matching guest in database to get their actual profile history
+          const matchingGuest = guests.find(
+            (g) => g.email.toLowerCase() === authedUser.email.toLowerCase() || g.name === authedUser.name
+          );
+
+          // Find notes associated with this guest
+          const guestNotes = crmNotes.filter(
+            (n) => n.name.toLowerCase() === authedUser.name.toLowerCase()
+          );
+
+          const response = await fetch("/api/recommend-stay", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              guestName: authedUser.name,
+              guestHistory: matchingGuest ? matchingGuest.history : "First time guest",
+              crmNotes: guestNotes,
+              rooms,
+            }),
+          });
+
+          if (!response.ok) {
+            throw new Error("concierge portal response error");
+          }
+
+          const data = await response.json();
+          if (data.success && data.recommendation) {
+            setAiRecommendation(data.recommendation);
+          } else {
+            setAiError(data.error || "Unable to parse upgrade response");
+          }
+        } catch (err: any) {
+          console.error("AI Upgrade recommendation fetch error:", err);
+          setAiError("Digital Concierge temporarily offline.");
+        } finally {
+          setIsAiLoading(false);
+        }
+      };
+
+      fetchRecommendation();
+    } else {
+      setAiRecommendation(null);
+      setAiError(null);
+    }
+  }, [isLoggedIn, authedUser, guests, crmNotes, rooms]);
 
   // Booking details calculation
   const totalNights = useMemo(() => {
@@ -755,6 +821,109 @@ export default function GuestPortal({
                   </div>
                 </div>
               )}
+
+              {/* Gemini Stay Recommendation Interactive Card */}
+              {isAiLoading && (
+                <div className="bg-slate-900/40 border border-indigo-500/20 p-6 rounded-2xl animate-pulse flex flex-col items-center justify-center text-center space-y-3">
+                  <div className="w-10 h-10 rounded-full border-t-2 border-r-2 border-indigo-500 animate-spin"></div>
+                  <p className="text-xs text-indigo-300 font-mono">
+                    {lang === 'en' ? 'Sorya AI Digital Concierge is tailoring your luxury upgrade stay...' : 'ភ្នាក់ងារ AI កំពុងរៀបចំបន្ទប់ពិសេសជូនលោកអ្នក...'}
+                  </p>
+                </div>
+              )}
+
+              {!isAiLoading && aiError && (
+                <div className="bg-rose-500/10 border border-rose-500/20 p-4 rounded-xl flex items-center gap-2 text-rose-450 text-xs">
+                  <Info className="w-4 h-4 shrink-0" />
+                  <span>{aiError}</span>
+                </div>
+              )}
+
+              {!isAiLoading && aiRecommendation && (
+                <div className="bg-gradient-to-r from-slate-900 via-indigo-950/60 to-slate-950 border-2 border-amber-500/30 p-6 rounded-3xl relative overflow-hidden shadow-xl animate-in fade-in slide-in-from-top-4 duration-300">
+                  {/* Decorative glowing backdrops */}
+                  <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                  <div className="absolute bottom-0 left-0 w-24 h-24 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none"></div>
+                  
+                  <div className="relative z-10 space-y-4">
+                    {/* Header */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-indigo-500/15">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-amber-500/10 flex items-center justify-center text-amber-400">
+                          <Sparkles className="w-4 h-4 text-amber-400 animate-pulse" />
+                        </div>
+                        <div>
+                          <span className="text-[10px] font-bold text-amber-400 uppercase tracking-widest font-mono">
+                            {lang === 'en' ? 'AI Concierge Stay Recommendation' : 'ការណែនាំបន្ទប់ស្នាក់នៅពិសេសដោយ AI'}
+                          </span>
+                          <h4 className="text-sm font-black text-slate-100 font-sans">
+                            {lang === 'en' ? 'Tailored Luxury Upgrade' : 'ជម្រើសបន្ទប់ដែលរៀបចំជាពិសេសសម្រាប់អ្នក'}
+                          </h4>
+                        </div>
+                      </div>
+                      <div className="bg-amber-500/10 border border-amber-500/20 py-1 px-3 rounded-full text-center sm:text-right self-start sm:self-auto">
+                        <span className="text-xs font-black text-amber-300 font-sans tracking-wide">
+                          ✨ {aiRecommendation.recommendedRoomType}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Vibe & Reasoning */}
+                    <div className="space-y-2.5">
+                      <p className="text-xs text-indigo-200 italic font-medium">
+                        "{aiRecommendation.poeticVibe}"
+                      </p>
+                      <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                        {aiRecommendation.reasoning}
+                      </p>
+                    </div>
+
+                    {/* Bulletpoints Grid */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                      {aiRecommendation.priorityBulletpoints.map((point, index) => (
+                        <div key={index} className="bg-slate-950/45 border border-indigo-500/10 p-3 rounded-xl flex items-start gap-2.5">
+                          <Check className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                          <span className="text-[11px] text-slate-300 leading-tight font-sans">{point}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Promo/Incentive & Actions */}
+                    <div className="pt-3 border-t border-indigo-505/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-emerald-450 tracking-wider font-mono bg-emerald-500/10 py-1 px-2.5 rounded-lg border border-emerald-500/15 shrink-0 uppercase">
+                          {lang === 'en' ? 'Upgrade Benefit' : 'អត្ថប្រយោជន៍ស្នាក់នៅ'}
+                        </span>
+                        <p className="text-xs text-emerald-300 font-semibold leading-tight font-sans">
+                          {aiRecommendation.upgradeIncentive}
+                        </p>
+                      </div>
+                      
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedType(aiRecommendation.recommendedRoomType);
+                          // Filter catalog
+                          triggerToast(
+                            lang === 'en' 
+                              ? `Filtered catalog for recommended room type: ${aiRecommendation.recommendedRoomType}` 
+                              : `បានត្រងស្វែងរកប្រភេទបន្ទប់ណែនាំ៖ ${aiRecommendation.recommendedRoomType}`
+                          );
+                          // Smooth scroll
+                          const catalogEl = document.getElementById("available-rooms-catalog");
+                          if (catalogEl) {
+                            catalogEl.scrollIntoView({ behavior: "smooth" });
+                          }
+                        }}
+                        className="py-2.5 px-5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-450 hover:to-amber-550 text-[#0f172a] font-extrabold text-xs rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5 shadow-lg shadow-amber-500/10 shrink-0 select-none"
+                      >
+                        <span>{lang === 'en' ? 'Review Recommended Upgrade' : 'ពិនិត្យបន្ទប់ណែនាំឡើងវិញ'}</span>
+                        <ChevronRight className="w-3.5 h-3.5 stroke-[3px]" />
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
               
               {/* Advanced Catalog Filters */}
               <div className="bg-[#111c30]/50 border border-slate-700/50 p-5 rounded-2xl space-y-4">
@@ -822,7 +991,7 @@ export default function GuestPortal({
               </div>
 
               {/* RENDER DYNAMIC ROOMS CATALOG GROUPED BY CATEGORIES (each with description, price and Unsplash high-res visual image) */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div id="available-rooms-catalog" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                 {availableRoomsCatalog.map((room) => (
                   <div 
                     key={room.id}
